@@ -1,0 +1,46 @@
+{
+  "name": "tjsdoc-plugin-watcher",
+  "version": "0.0.1",
+  "description": "Provides file watching functionality to efficiently and incrementally rebuild generated docs (experimental!).",
+  "author": "typhonrt",
+  "homepage": "https://tjsdoc.typhonjs.io/",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/typhonjs-node-tjsdoc-plugins/tjsdoc-plugin-watcher"
+  },
+  "scripts": {
+    "build": "babel-node ./node_modules/typhonjs-npm-scripts-build-babel/scripts/build.js",
+    "eslint": "eslint .",
+    "dev-test": "BABEL_ENV=tjsdoc-dev babel-node ./node_modules/typhonjs-npm-scripts-test-mocha/scripts/mocha.js dev_test",
+    "dev-test-coverage": "BABEL_ENV=tjsdoc-dev babel-node ./node_modules/typhonjs-npm-scripts-test-mocha/scripts/mocha-istanbul.js dev_test",
+    "dev-test-npm": "BABEL_ENV=tjsdoc-dev babel-node ./node_modules/typhonjs-npm-scripts-test-mocha/scripts/mocha.js dev_test_npm",
+    "dev-tjsdoc": "BABEL_ENV=tjsdoc-dev babel-node ../../typhonjs-node-tjsdoc/tjsdoc-babylon/src/TJSDocBabylonCLI.js -c .tjsdocrc-local",
+    "prepublish": "babel-node ./node_modules/typhonjs-npm-scripts-publish/scripts/prepublish.js"
+  },
+  "dependencies": {
+    "babel-runtime": "^6.0.0",
+    "gaze": "^1.0.0"
+  },
+  "devDependencies": {
+    "tjsdoc-test-utils": "git+https://git@github.com/typhonjs-node-tjsdoc/tjsdoc-test-utils.git",
+    "typhonjs-config-eslint": "^0.5.0",
+    "typhonjs-npm-build-test": "^0.6.0"
+  },
+  "keywords": [
+    "typhonjs",
+    "tjsdoc",
+    "runtime",
+    "babylon"
+  ],
+  "files": [
+    "dist",
+    "src",
+    ".tjsdocrc",
+    "AUTHORS.md"
+  ],
+  "main": "dist/plugin.js",
+  "bugs": {
+    "url": "https://github.com/typhonjs-node-tjsdoc/tjsdoc/issues"
+  }
+}

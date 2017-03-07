@@ -1,0 +1,10 @@
+/* Some comments! You can include comments in TJSDoc config files */
+{
+  "source": "src",
+  "destination": "docs",
+  "builtinPluginVirtual": true,
+  "emptyDestination": true,
+  "unexportIdentifier": true,
+
+  "plugins": [ { "name": "./src/plugin.js" } ]
+}

@@ -1,0 +1,7 @@
+/* Load local development modules directly. */
+{
+  "extends": ".tjsdocrc",
+
+  "publisher": "../../typhonjs-node-tjsdoc/tjsdoc-publisher-static-html/src/publish.js",
+  "runtime": "../../typhonjs-node-tjsdoc/tjsdoc-babylon/src/TJSDocBabylon.js"
+}
