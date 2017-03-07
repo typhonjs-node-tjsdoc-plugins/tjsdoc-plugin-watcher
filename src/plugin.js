@@ -68,6 +68,4 @@ export function onComplete(ev)
 
       eventbus.trigger('log:info:raw', `tjsdoc-plugin-watcher - watching files: ${JSON.stringify(files)}`);
    });
-
-   setTimeout(() => {}, 500);
 }
