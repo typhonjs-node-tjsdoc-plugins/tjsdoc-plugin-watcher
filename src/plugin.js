@@ -12,7 +12,7 @@ export function onComplete(ev)
 
    const eventbus = ev.eventbus;
 
-   const config = eventbus.triggerSync('tjsdoc:get:config', false);
+   const config = eventbus.triggerSync('tjsdoc:get:config');
 
    eventbus.trigger('log:info:raw', `tjsdoc-plugin-watcher - watching source globs: ${
     JSON.stringify(config._sourceGlobs)}`);
