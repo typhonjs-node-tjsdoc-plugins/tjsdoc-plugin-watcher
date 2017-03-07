@@ -34,7 +34,7 @@ export function onComplete(ev)
 
          try
          {
-            const result = eventbus.triggerSync('tjsdoc:file:generate:doc:data', filePath, [], [], false);
+            const result = eventbus.triggerSync('tjsdoc:file:generate:doc:data:throw:errors', filePath);
 
             if (result)
             {
