@@ -13,7 +13,7 @@ export function onComplete(ev)
 
    const eventbus = ev.eventbus;
 
-   const config = eventbus.triggerSync('tjsdoc:get:config');
+   const config = eventbus.triggerSync('tjsdoc:data:config:get');
 
    eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching source globs: ${
     JSON.stringify(config._sourceGlobs)}`);
@@ -29,7 +29,7 @@ export function onComplete(ev)
    let promptVisible = false;
 
    // Watch all .js files/dirs in process.cwd()
-   gaze(config._sourceGlobs, { debounceDelay: 3000 }, (err, newWatcher) =>
+   gaze(config._sourceGlobs, { debounceDelay: 500 }, (err, newWatcher) =>
    {
       watcher = newWatcher;
 
@@ -42,7 +42,7 @@ export function onComplete(ev)
 
          try
          {
-            const result = eventbus.triggerSync('tjsdoc:file:generate:doc:data:throw:errors', filePath);
+            const result = eventbus.triggerSync('tjsdoc:generate:file:doc:data:throw:errors', filePath);
 
             if (result)
             {
@@ -125,7 +125,7 @@ export function onComplete(ev)
             promptVisible = false;
             setImmediate(() =>
             {
-               watcherCloseFunction = () => { eventbus.trigger('tjsdoc:regenerate'); };
+               watcherCloseFunction = () => { eventbus.trigger('tjsdoc:regenerate:all:docs'); };
                process.removeAllListeners('SIGINT');
                watcher.close();
                rl.close();
