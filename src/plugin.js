@@ -125,7 +125,7 @@ export function onComplete(ev)
             promptVisible = false;
             setImmediate(() =>
             {
-               watcherCloseFunction = () => { eventbus.trigger('tjsdoc:regenerate:all:docs'); };
+               watcherCloseFunction = () => { eventbus.trigger('tjsdoc:system:regenerate:all:docs'); };
                process.removeAllListeners('SIGINT');
                watcher.close();
                rl.close();
