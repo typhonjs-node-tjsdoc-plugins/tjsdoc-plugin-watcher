@@ -28,7 +28,7 @@ export function onComplete(ev)
    let watcherCloseFunction;
    let promptVisible = false;
 
-   // Watch all .js files/dirs in process.cwd()
+   // Watch all source files.
    gaze(config._sourceGlobs, { debounceDelay: 500 }, (err, newWatcher) =>
    {
       watcher = newWatcher;
@@ -42,7 +42,7 @@ export function onComplete(ev)
 
          try
          {
-            const result = eventbus.triggerSync('tjsdoc:generate:file:doc:data:throw:errors', filePath);
+            const result = eventbus.triggerSync('tjsdoc:system:generate:file:doc:data', filePath);
 
             if (result)
             {
