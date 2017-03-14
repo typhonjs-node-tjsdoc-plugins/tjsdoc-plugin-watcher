@@ -22,7 +22,7 @@
     "gaze": "^1.0.0"
   },
   "devDependencies": {
-    "backbone-esnext-eventbus": "^0.3.0",
+    "fs-extra": "^2.0.0",
     "tjsdoc-test-utils": "git+https://git@github.com/typhonjs-node-tjsdoc/tjsdoc-test-utils.git",
     "typhonjs-config-eslint": "^0.5.0",
     "typhonjs-npm-build-test": "^0.6.0"
