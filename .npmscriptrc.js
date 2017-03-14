@@ -26,14 +26,14 @@ var config =
       },
 
       "istanbul": { "command": "cover", "options": ["--include-all-sources --root src"] },
-      "mocha": { "source": "./test/src", "options": ["--compilers js:babel-register", "-t 120000 --recursive"] }
+      "mocha": { "source": "./test/src", "options": ["--compilers js:babel-register", "-t 20000 --recursive"] }
    },
 
    // For local developer testing.
    "dev_test":
    {
       "istanbul": { "command": "cover", "options": ["--include-all-sources --root src"] },
-      "mocha": { "source": "./test/src", "options": ["--compilers js:babel-register", "-t 120000 --recursive"] }
+      "mocha": { "source": "./test/src", "options": ["--compilers js:babel-register", "-t 20000 --recursive"] }
    }
 };
 
