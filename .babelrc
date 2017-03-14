@@ -25,6 +25,7 @@
           "cwd": "babelrc",
           "alias":
           {
+            "tjsdoc-test-utils": "../../typhonjs-node-tjsdoc/tjsdoc-test-utils/src/Util.js",
           }
         }],
         "transform-runtime"
