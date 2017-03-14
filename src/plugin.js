@@ -87,8 +87,6 @@ export function onComplete(ev)
       {
          sourceWatcher.close();
       }
-
-      setTimeout(() => {}, 500);
    };
 
    localEventProxy.on('tjsdoc:system:watcher:shutdown', shutdownCallback);
