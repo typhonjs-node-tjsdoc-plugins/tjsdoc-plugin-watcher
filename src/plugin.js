@@ -23,14 +23,25 @@ export function onComplete(ev)
 
    const verbose = typeof ev.pluginOptions.verbose === 'boolean' ? ev.pluginOptions.verbose : false;
 
+   let watcherStartCount = 0;
+   let watcherCloseCount = 0;
+   const watcherStartData = {};
+
    const log = (message) =>
    {
       if (!silent) { eventbus.trigger('log:info:time', message); }
    };
 
+   const logNewLine = () => { console.log(''); };
+
    const logVerbose = (message) =>
    {
       if (verbose && !silent) { eventbus.trigger('log:info:time', message); }
+   };
+
+   const logVerboseRaw = (message) =>
+   {
+      if (verbose && !silent) { eventbus.trigger('log:info:raw', message); }
    };
 
    let sourceWatcher, testWatcher;
@@ -40,27 +51,44 @@ export function onComplete(ev)
 
    const processInterruptCallback = () =>
    {
-      eventbus.trigger('log:warn:time', 'Received SIGINT. Shutting down.');
+      if (promptVisible) { logNewLine(); }
 
-      if (rl) { rl.close(); }
-      if (sourceWatcher) { sourceWatcher.close(); }
-      if (testWatcher) { testWatcher.close(); }
+      eventbus.trigger('log:warn:time', 'tjsdoc-plugin-watcher - received SIGINT; shutting down.');
 
-      setImmediate(() => process.exit(0));
+      setImmediate(() => eventbus.trigger('tjsdoc:system:watcher:shutdown'));
    };
 
-   const shutdownCallback = () =>
+   const shutdownCallback = (data) =>
    {
-      log('tjsdoc-plugin-watcher - shutdown requested.');
+      const regenerate = typeof data === 'object' && typeof data.regenerate === 'boolean' ? data.regenerate : false;
+
+      if (promptVisible) { logNewLine(); }
+
+      logVerbose(`tjsdoc-plugin-watcher - shutdown requested${regenerate ? ' with regeneration' : ''}.`);
+
       promptVisible = false;
 
       if (rl) { rl.close(); }
-      if (sourceWatcher) { sourceWatcher.close(); }
-      if (testWatcher) { testWatcher.close(); }
+
+      rl = void 0;
+
+      localEventProxy.off();
 
       process.removeListener('SIGINT', processInterruptCallback);
 
-      localEventProxy.off();
+      if (regenerate) { watcherCloseFunction = () => eventbus.trigger('tjsdoc:system:regenerate:all:docs'); }
+
+      // If `testWatcher` exists it will close `sourceWatcher` otherwise potentially invoke `sourceWatcher.close()`.
+      if (testWatcher)
+      {
+         testWatcher.close();
+      }
+      else if (sourceWatcher)
+      {
+         sourceWatcher.close();
+      }
+
+      setTimeout(() => {}, 500);
    };
 
    localEventProxy.on('tjsdoc:system:watcher:shutdown', shutdownCallback);
@@ -79,37 +107,40 @@ export function onComplete(ev)
    {
       log(`tjsdoc-plugin-watcher - watching source globs: ${JSON.stringify(config._sourceGlobs)}`);
 
+      watcherStartCount++;
+      watcherCloseCount++;
+
       // Watch all source files.
       gaze(config._sourceGlobs, gazeOptions, (err, watcher) =>
       {
          sourceWatcher = watcher;
 
-         // On source file changed.
-         sourceWatcher.on('changed', (filePath) =>
-         {
-            if (promptVisible) { logVerbose(''); }
-
-            logVerbose(`source changed: ${filePath}`);
-
-            eventbus.trigger('tjsdoc:system:watcher:file:changed', { type: 'source', filePath });
-         });
-
          // On source file added.
          sourceWatcher.on('added', (filePath) =>
          {
-            if (promptVisible) { logVerbose(''); }
+            if (promptVisible) { logVerboseRaw(''); }
 
-            logVerbose(`source addition: ${filePath}`);
+            logVerbose(`tjsdoc-plugin-watcher - source addition: ${filePath}`);
 
             eventbus.trigger('tjsdoc:system:watcher:file:added', { type: 'source', filePath });
+         });
+
+         // On source file changed.
+         sourceWatcher.on('changed', (filePath) =>
+         {
+            if (promptVisible) { logVerboseRaw(''); }
+
+            logVerbose(`tjsdoc-plugin-watcher - source changed: ${filePath}`);
+
+            eventbus.trigger('tjsdoc:system:watcher:file:changed', { type: 'source', filePath });
          });
 
          // On source file deleted.
          sourceWatcher.on('deleted', (filePath) =>
          {
-            if (promptVisible) { logVerbose(''); }
+            if (promptVisible) { logVerboseRaw(''); }
 
-            logVerbose(`source deletion: ${filePath}`);
+            logVerbose(`tjsdoc-plugin-watcher - source deletion: ${filePath}`);
 
             eventbus.trigger('tjsdoc:system:watcher:file:deleted', { type: 'source', filePath });
          });
@@ -119,22 +150,41 @@ export function onComplete(ev)
          {
             eventbus.trigger('tjsdoc:system:watcher:stopped', { type: 'source' });
 
+            logVerbose('tjsdoc-plugin-watcher - source watcher stopped.');
+
+            sourceWatcher = void 0;
+
+            watcherCloseCount--;
+
+            if (watcherCloseCount === 0)
+            {
+               eventbus.trigger('tjsdoc:system:watcher:stopped');
+            }
+
             if (typeof watcherCloseFunction === 'function')
             {
                const closeFunction = watcherCloseFunction;
+
                watcherCloseFunction = void 0;
+
+               logVerbose('tjsdoc-plugin-watcher - shutdown callback invoked.');
+
                setImmediate(closeFunction);
             }
          });
 
-         if (promptVisible) { logVerbose(''); }
+         watcherStartData.source = { globs: config._sourceGlobs, files: sourceWatcher.watched() };
 
          // Get watched files with relative paths
          const files = sourceWatcher.relative();
 
+         if (promptVisible) { logNewLine(); }
+
          log(`tjsdoc-plugin-watcher - watching source files: ${JSON.stringify(files)}`);
 
-         eventbus.trigger('tjsdoc:system:watcher:started', { type: 'source' });
+         watcherStartCount--;
+
+         if (watcherStartCount === 0) { eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData); }
       });
    }
 
@@ -142,37 +192,40 @@ export function onComplete(ev)
    {
       log(`tjsdoc-plugin-watcher - watching test globs: ${JSON.stringify(config.test._sourceGlobs)}`);
 
+      watcherStartCount++;
+      watcherCloseCount++;
+
       // Watch all test files.
       gaze(config.test._sourceGlobs, gazeOptions, (err, watcher) =>
       {
          testWatcher = watcher;
 
-         // On file changed
-         testWatcher.on('changed', (filePath) =>
-         {
-            if (promptVisible) { logVerbose(''); }
-
-            logVerbose(`test changed: ${filePath}`);
-
-            eventbus.trigger('tjsdoc:system:watcher:file:changed', { type: 'test', filePath });
-         });
-
          // On file added
          testWatcher.on('added', (filePath) =>
          {
-            if (promptVisible) { logVerbose(''); }
+            if (promptVisible) { logVerboseRaw(''); }
 
-            logVerbose(`test addition: ${filePath}`);
+            logVerbose(`tjsdoc-plugin-watcher - test addition: ${filePath}`);
 
             eventbus.trigger('tjsdoc:system:watcher:file:added', { type: 'test', filePath });
+         });
+
+         // On file changed
+         testWatcher.on('changed', (filePath) =>
+         {
+            if (promptVisible) { logVerboseRaw(''); }
+
+            logVerbose(`tjsdoc-plugin-watcher - test changed: ${filePath}`);
+
+            eventbus.trigger('tjsdoc:system:watcher:file:changed', { type: 'test', filePath });
          });
 
          // On file deleted
          testWatcher.on('deleted', (filePath) =>
          {
-            if (promptVisible) { logVerbose(''); }
+            if (promptVisible) { logVerboseRaw(''); }
 
-            logVerbose(`test deletion: ${filePath}`);
+            logVerbose(`tjsdoc-plugin-watcher - test deletion: ${filePath}`);
 
             eventbus.trigger('tjsdoc:system:watcher:file:deleted', { type: 'test', filePath });
          });
@@ -181,20 +234,32 @@ export function onComplete(ev)
          {
             eventbus.trigger('tjsdoc:system:watcher:stopped', { type: 'test' });
 
-            if (typeof watcherCloseFunction === 'function' && sourceWatcher)
+            logVerbose('tjsdoc-plugin-watcher - test watcher stopped.');
+
+            testWatcher = void 0;
+
+            watcherCloseCount--;
+
+            if (watcherCloseCount === 0)
             {
-               sourceWatcher.close();
+               eventbus.trigger('tjsdoc:system:watcher:stopped');
             }
+
+            if (sourceWatcher) { sourceWatcher.close(); }
          });
 
-         if (promptVisible) { logVerbose(''); }
+         if (promptVisible) { logNewLine(); }
+
+         watcherStartData.test = { globs: config.test._sourceGlobs, files: testWatcher.watched() };
 
          // Get watched files with relative paths
          const files = testWatcher.relative();
 
          log(`tjsdoc-plugin-watcher - watching test files: ${JSON.stringify(files)}`);
 
-         eventbus.trigger('tjsdoc:system:watcher:started', { type: 'test' });
+         watcherStartCount--;
+
+         if (watcherStartCount === 0) { eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData); }
       });
    }
 
@@ -211,15 +276,7 @@ export function onComplete(ev)
             switch (line.trim())
             {
                case 'exit':
-                  promptVisible = false;
-
-                  rl.close();
-                  if (sourceWatcher) { sourceWatcher.close(); }
-                  if (testWatcher) { testWatcher.close(); }
-
-                  process.removeListener('SIGINT', processInterruptCallback);
-
-                  setImmediate(() => process.exit(0));
+                  setImmediate(() => eventbus.trigger('tjsdoc:system:watcher:shutdown'));
                   break;
 
                case 'globs':
@@ -227,40 +284,33 @@ export function onComplete(ev)
 
                   if (config._sourceGlobs)
                   {
-                     log(`watching source globs: ${JSON.stringify(config._sourceGlobs)}`);
+                     log(`tjsdoc-plugin-watcher - watching source globs: ${JSON.stringify(config._sourceGlobs)}`);
                   }
 
                   if (config.test && config.test._sourceGlobs)
                   {
-                     log(`watching test globs: ${JSON.stringify(config.test._sourceGlobs)}`);
+                     log(`tjsdoc-plugin-watcher - watching test globs: ${JSON.stringify(config.test._sourceGlobs)}`);
+                  }
+                  break;
+
+               case 'help':
+                  if (!silent)
+                  {
+                     eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - options:[0m `);
+                     eventbus.trigger('log:info:raw', `[32m  'exit', shutdown watcher[0m `);
+                     eventbus.trigger('log:info:raw', `[32m  'globs', list globs being watched[0m `);
+                     eventbus.trigger('log:info:raw', `[32m  'help', this listing of commands[0m `);
+                     eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m `);
+                     eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m `);
+                     eventbus.trigger('log:info:raw', '');
+
+                     promptVisible = true;
+                     rl.prompt();
                   }
                   break;
 
                case 'regen':
-               case 'regenerate':
-                  promptVisible = false;
-
-                  setImmediate(() =>
-                  {
-                     watcherCloseFunction = () =>
-                     {
-                        eventbus.trigger('tjsdoc:system:regenerate:all:docs');
-                     };
-
-                     process.removeAllListeners('SIGINT');
-
-                     // If `testWatcher` exists it will close `sourceWatcher` otherwise
-                     if (testWatcher)
-                     {
-                        testWatcher.close();
-                     }
-                     else if (sourceWatcher)
-                     {
-                        sourceWatcher.close();
-                     }
-
-                     rl.close();
-                  });
+                  setImmediate(() => eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }));
                   break;
 
                case 'watching':
@@ -268,21 +318,26 @@ export function onComplete(ev)
 
                   if (sourceWatcher)
                   {
-                     log(`watching source files: ${JSON.stringify(sourceWatcher.relative())}`);
+                     log(`tjsdoc-plugin-watcher - watching source files: ${JSON.stringify(sourceWatcher.relative())}`);
                   }
 
                   if (testWatcher)
                   {
-                     log(`watching test files: ${JSON.stringify(testWatcher.relative())}`);
+                     log(`tjsdoc-plugin-watcher - watching test files: ${JSON.stringify(testWatcher.relative())}`);
                   }
                   break;
 
                default:
+                  log(`tjsdoc-plugin-watcher - unknown command (type 'help' for instructions)`);
+
+               // eslint-disable-next-line no-fallthrough
+               case '':
                   if (!silent)
                   {
                      promptVisible = true;
                      rl.prompt();
                   }
+
                   break;
             }
          });
