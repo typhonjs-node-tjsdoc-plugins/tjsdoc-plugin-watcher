@@ -1,10 +1,15 @@
 /* Some comments! You can include comments in TJSDoc config files */
 {
-  "source": "src",
+  "source": ["src", "test/dest/main"],
   "destination": "docs",
   "builtinPluginVirtual": true,
   "emptyDestination": true,
   "unexportIdentifier": true,
+
+  "test": {
+    "type": "mocha",
+    "source": "test/dest/test"
+  },
 
   "plugins": [ { "name": "./src/plugin.js" } ]
 }

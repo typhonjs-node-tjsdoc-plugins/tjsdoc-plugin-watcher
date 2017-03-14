@@ -25,21 +25,15 @@ var config =
          "report": "./node_modules/.bin/codecov"
       },
 
-      "istanbul": { "command": "cover", "options": ["--include-all-sources --root src -x '**/template/**'"] },
-      "mocha": { "source": "./node_modules/tjsdoc-tests-ecmascript/test/src", "options": ["--require tjsdoc-tests-ecmascript", "--compilers js:babel-register", "-t 120000 --recursive"] }
+      "istanbul": { "command": "cover", "options": ["--include-all-sources --root src"] },
+      "mocha": { "source": "./test/src", "options": ["--compilers js:babel-register", "-t 120000 --recursive"] }
    },
 
    // For local developer testing.
    "dev_test":
    {
-      "istanbul": { "command": "cover", "options": ["--include-all-sources --root src -x '**/template/**'"] },
-      "mocha": { "source": "./node_modules/tjsdoc-tests-ecmascript/test/src", "options": ["--require tjsdoc-tests-ecmascript", "--compilers js:babel-register", "-t 120000 --recursive"] }
-   },
-
-   // Always tests with NPM module: tjsdoc-tests-ecmascript
-   "dev_test_npm":
-   {
-      "mocha": { "source": "./node_modules/tjsdoc-tests-ecmascript/test/src", "options": ["--require tjsdoc-tests-ecmascript", "--compilers js:babel-register", "-t 120000 --recursive"] }
+      "istanbul": { "command": "cover", "options": ["--include-all-sources --root src"] },
+      "mocha": { "source": "./test/src", "options": ["--compilers js:babel-register", "-t 120000 --recursive"] }
    }
 };
 
