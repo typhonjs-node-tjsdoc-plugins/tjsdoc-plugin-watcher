@@ -1,4 +1,5 @@
 import chokidar   from 'chokidar';
+import path       from 'path';
 import readline   from 'readline';
 
 /**
@@ -24,6 +25,12 @@ class Watcher
        * @type {EventProxy}
        */
       this.eventProxy = ev.eventbus.createEventProxy();
+
+      /**
+       * The target project TJSDocConfig object.
+       * @type {TJSDocConfig}
+       */
+      this.config = ev.data.config;
 
       /**
        * The plugin options.
@@ -89,23 +96,151 @@ class Watcher
    }
 
    /**
-    * Triggers any outbound events if not paused.
+    * Get the currently watched source and test glob patterns.
     *
-    * @param {*}  args - event arguments
+    * @returns {{source: Array, test: Array}}
     */
-   triggerEvent(...args)
+   getGlobs()
    {
-      if (!this.paused) { this.eventbus.trigger(...args); }
+      return {
+         source: this.config._sourceGlobs ? this.config._sourceGlobs : [],
+         test: this.config.test && this.config.test._sourceGlobs ? this.config.test._sourceGlobs : []
+      };
    }
 
    /**
-    * Returns the paused state.
+    * Gets the current user settable options.
     *
-    * @returns {boolean}
+    * @returns {{paused: boolean, silent: boolean, verbose: boolean}}
     */
-   getPaused()
+   getOptions()
    {
-      return this.paused;
+      return { paused: this.paused, silent: this.silent, verbose: this.verbose };
+   }
+
+   /**
+    * Get the currently watched globs and files.
+    *
+    * @param {object}      [options] - Optional parameters.
+    * @property {boolean}  [options.relative] - If true then all directory paths in `files` is made relative to CWD.
+    *
+    * @returns {{source: {globs: Array, files: {}}, test: {globs: Array, files: {}}}}
+    */
+   getWatching(options)
+   {
+      const sourceGlobs = this.config._sourceGlobs ? this.config._sourceGlobs : [];
+      const sourceFiles = this.sourceWatcher ? this.sourceWatcher.getWatched() : {};
+      const testGlobs = this.config.test && this.config.test._sourceGlobs ? this.config.test._sourceGlobs : [];
+      const testFiles = this.testWatcher ? this.testWatcher.getWatched() : {};
+
+      // Filter absolute paths converting them to relative.
+      if (typeof options === 'object' && typeof options.relative === 'boolean' && options.relative)
+      {
+         for (const key in sourceFiles)
+         {
+            const relKey = path.relative('.', key);
+            sourceFiles[relKey] = sourceFiles[key];
+            delete sourceFiles[key];
+         }
+
+         for (const key in testFiles)
+         {
+            const relKey = path.relative('.', key);
+            testFiles[relKey] = testFiles[key];
+            delete testFiles[key];
+         }
+      }
+
+      return {
+         source: { globs: sourceGlobs, files: sourceFiles },
+         test: { globs: testGlobs, files: testFiles }
+      };
+   }
+
+   /**
+    * Provides an `ignores` function consumable by chokidar `options.ignored`. `config._includes` and `config._excludes`
+    * is used to provide additional file filtering.
+    *
+    * @param {string}   path - file / directory path.
+    * @param {Object}   stats - fs.Stats instance (may be undefined)
+    *
+    * @returns {boolean} false for not ignore; true to ignore file / directory.
+    */
+   ignoredSource(path, stats)
+   {
+      if (stats)
+      {
+         // Don't ignore any directories.
+         if (stats.isDirectory()) { return false; }
+
+         if (stats.isFile())
+         {
+            let match = false;
+
+            for (const reg of this.config._includes)
+            {
+               if (path.match(reg))
+               {
+                  match = true;
+                  break;
+               }
+            }
+
+            if (!match) { return true; }
+
+            for (const reg of this.config._excludes)
+            {
+               if (path.match(reg)) { return true; }
+            }
+
+            return false;
+         }
+      }
+
+      return false;
+   }
+
+   /**
+    * Provides an `ignores` function consumable by chokidar `options.ignored`. `config.test._includes` and
+    * `config.test._excludes` is used to provide additional file filtering.
+    *
+    * @param {string}   path - file / directory path.
+    * @param {Object}   stats - fs.Stats instance (may be undefined)
+    *
+    * @returns {boolean} false for not ignore; true to ignore file / directory.
+    */
+   ignoredTest(path, stats)
+   {
+      if (stats)
+      {
+         // Don't ignore any directories.
+         if (stats.isDirectory()) { return false; }
+
+         if (stats.isFile())
+         {
+            let match = false;
+
+            for (const reg of this.config.test._includes)
+            {
+               if (path.match(reg))
+               {
+                  match = true;
+                  break;
+               }
+            }
+
+            if (!match) { return true; }
+
+            for (const reg of this.config.test._excludes)
+            {
+               if (path.match(reg)) { return true; }
+            }
+
+            return false;
+         }
+      }
+
+      return false;
    }
 
    /**
@@ -122,11 +257,13 @@ class Watcher
        */
       let watcherStartCount = 0;
 
-      const watcherStartData = {};
+      const watcherStartData = { source: { globs: [], files: {} }, test: { globs: [], files: {} } };
 
-      this.eventProxy.on('tjsdoc:system:watcher:pause:get', this.getPaused, this);
-      this.eventProxy.on('tjsdoc:system:watcher:pause:set', this.setPaused, this);
+      this.eventProxy.on('tjsdoc:system:watcher:globs:get', this.getGlobs, this);
+      this.eventProxy.on('tjsdoc:system:watcher:options:get', this.getOptions, this);
+      this.eventProxy.on('tjsdoc:system:watcher:options:set', this.setOptions, this);
       this.eventProxy.on('tjsdoc:system:watcher:shutdown', this.shutdownCallback, this);
+      this.eventProxy.on('tjsdoc:system:watcher:watching:get', this.getWatching, this);
 
       if (config._sourceGlobs)
       {
@@ -134,7 +271,10 @@ class Watcher
 
          watcherStartCount++;
 
-         this.sourceWatcher = chokidar.watch(config._sourceGlobs, this.chokidarOptions);
+         // Create source watcher providing a custom ignored function which uses config._includes and config._excludes
+         // for filtering files.
+         this.sourceWatcher = chokidar.watch(config._sourceGlobs,
+          Object.assign({ ignored: this.ignoredSource.bind(this) }, this.chokidarOptions));
 
          // On source watcher ready.
          this.sourceWatcher.on('ready', () =>
@@ -183,7 +323,10 @@ class Watcher
 
          watcherStartCount++;
 
-         this.testWatcher = chokidar.watch(config.test._sourceGlobs, this.chokidarOptions);
+         // Create test watcher providing a custom ignored function which uses config.test._includes and
+         // config.test._excludes for filtering files.
+         this.testWatcher = chokidar.watch(config.test._sourceGlobs,
+          Object.assign({ ignored: this.ignoredTest.bind(this) }, this.chokidarOptions));
 
          // On test watcher ready.
          this.testWatcher.on('ready', () =>
@@ -287,7 +430,6 @@ class Watcher
                         this.eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'silent [on/off]', turns on / off logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'status', logs current optional status[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'unpause', unpauses watcher events & logging[0m `);
                         this.eventbus.trigger('log:info:raw',
                          `[32m  'verbose [on/off]', turns on / off verbose logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m `);
@@ -478,15 +620,17 @@ class Watcher
    }
 
    /**
-    * Sets the paused state.
+    * Set optional parameters. All parameters are off by default.
     *
-    * @param {boolean} paused - The new paused state.
+    * @param {object} options - Defines optional parameters to set.
     */
-   setPaused(paused)
+   setOptions(options = {})
    {
-      if (typeof paused !== 'boolean') { throw new TypeError(`'paused' is not a 'boolean'.`); }
+      if (typeof options !== 'object') { throw new TypeError(`'options' is not an object.`); }
 
-      this.paused = paused;
+      if (typeof options.paused === 'boolean') { this.paused = options.paused; }
+      if (typeof options.silent === 'boolean') { this.silent = options.silent; }
+      if (typeof options.verbose === 'boolean') { this.verbose = options.verbose; }
    }
 
    /**
@@ -533,6 +677,16 @@ class Watcher
 
       // Either regenerate all docs or invoke the shutdown event.
       this.eventbus.trigger(regenerate ? 'tjsdoc:system:regenerate:all:docs' : 'tjsdoc:system:shutdown');
+   }
+
+   /**
+    * Triggers any outbound events if not paused.
+    *
+    * @param {*}  args - event arguments
+    */
+   triggerEvent(...args)
+   {
+      if (!this.paused) { this.eventbus.trigger(...args); }
    }
 }
 
