@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "babel-runtime": "^6.0.0",
-    "gaze": "^1.0.0"
+    "chokidar": "^1.0.0"
   },
   "devDependencies": {
     "fs-extra": "^2.0.0",
