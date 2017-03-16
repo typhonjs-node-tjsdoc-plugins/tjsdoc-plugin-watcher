@@ -13,7 +13,7 @@ const s_DEV_TARGET =
    type: 'ecmascript'
 };
 
-const s_DEBUG_LOG = false;
+const s_DEBUG_LOG = true;
 
 const log = (message) =>
 {
@@ -97,13 +97,53 @@ describe('tjsdoc-plugin-watcher', () =>
       Util.invoke(s_DEV_TARGET, './.tjsdocrc', { modConfig: false, silent: false });
    });
 
-   it('Options (silent=true), change, add, change, delete', (done) =>
+   it('Options (paused=true), add, change, delete', (done) =>
+   {
+      const config = JSON.parse(fs.readFileSync('./.tjsdocrc').toString());
+
+      config.plugins = [{ name: './src/plugin.js', options: { paused: true } }];
+
+      s_PERFORM_INIT_TEST(eventProxy, true, () =>
+      {
+         eventProxy.on('tjsdoc:system:watcher:update', () => { throw new Error('should be paused.'); });
+
+         // Since the watcher is paused s_PERFORM_CHANGES will throw an error!
+         setTimeout(() =>
+         {
+            fs.outputFileSync('./test/dest/main/source.js', 'new');
+            fs.outputFileSync('./test/dest/test/test.js', 'new');
+         }, 200);
+
+         setTimeout(() =>
+         {
+            fs.outputFileSync('./test/dest/main/source2.js', 'mod!');
+            fs.outputFileSync('./test/dest/test/test2.js', 'mod!');
+         }, 400);
+
+         setTimeout(() =>
+         {
+            fs.removeSync('./test/dest/main/source2.js');
+            fs.removeSync('./test/dest/test/test2.js');
+         }, 600);
+
+         setTimeout(() =>
+         {
+            eventProxy.trigger('tjsdoc:system:watcher:shutdown');
+         }, 1000);
+      });
+
+      eventProxy.on('tjsdoc:system:shutdown', () => done());
+
+      Util.invoke(s_DEV_TARGET, config, { modConfig: false, silent: false });
+   });
+
+   it('Options (silent=true), add, change, delete', (done) =>
    {
       const config = JSON.parse(fs.readFileSync('./.tjsdocrc').toString());
 
       eventProxy.on('log:info:time', () => { throw new Error(`Received 'log:info:time: event in 'silent' mode.`); });
 
-      config.plugins = [{ name: './src/plugin.js', options: { silent: true }}];
+      config.plugins = [{ name: './src/plugin.js', options: { silent: true } }];
 
       s_PERFORM_INIT_TEST(eventProxy, true,
        () => s_PERFORM_CHANGES(eventProxy, () => { eventProxy.trigger('tjsdoc:system:watcher:shutdown'); }));
@@ -113,7 +153,7 @@ describe('tjsdoc-plugin-watcher', () =>
       Util.invoke(s_DEV_TARGET, config, { modConfig: false, silent: false });
    });
 
-   it('Options (verbose=true), change, add, change, delete', (done) =>
+   it('Options (verbose=true), add, change, delete', (done) =>
    {
       const config = JSON.parse(fs.readFileSync('./.tjsdocrc').toString());
 
@@ -142,7 +182,7 @@ describe('tjsdoc-plugin-watcher', () =>
          if (message.startsWith('tjsdoc-plugin-watcher - watcher(s) stopped')) { verifyInfo.watchersStopped = true; }
       });
 
-      config.plugins = [{ name: './src/plugin.js', options: { verbose: true }}];
+      config.plugins = [{ name: './src/plugin.js', options: { verbose: true } }];
 
       s_PERFORM_INIT_TEST(eventProxy, true,
        () => s_PERFORM_CHANGES(eventProxy, () => { eventProxy.trigger('tjsdoc:system:watcher:shutdown'); }));
@@ -251,22 +291,22 @@ const s_PERFORM_CHANGES = (eventProxy, shutdownCallback) =>
       {
          deleteCount--;
 
-         if (deleteCount <= 0 && shutdownCallback)
+         if (deleteCount <= 0)
          {
             for (const key in verifyInfo)
             {
                if (!verifyInfo[key]) { throw new Error('s_PERFORM_CHANGES did not complete all operations'); }
             }
 
-            shutdownCallback();
+            if (shutdownCallback) { shutdownCallback(); }
          }
       }
    });
 
    setTimeout(() =>
    {
-      fs.outputFileSync('./test/dest/main/source.js', 'mod!');
-      fs.outputFileSync('./test/dest/test/test.js', 'mod!');
+      fs.outputFileSync('./test/dest/main/source.js', 'new');
+      fs.outputFileSync('./test/dest/test/test.js', 'new');
    }, 250);
 
    setTimeout(() =>

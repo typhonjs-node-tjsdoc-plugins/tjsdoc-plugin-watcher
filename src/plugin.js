@@ -36,7 +36,13 @@ class Watcher
        * Any Chokidar options taken from plugin options.
        * @type {object}
        */
-      this.chokidarOptions = Object.assign({}, pluginOptions.chokidarOptions);
+      this.chokidarOptions = pluginOptions.chokidarOptions || {};
+
+      /**
+       * While true no events are triggered or logging occurs; default: false
+       * @type {boolean}
+       */
+      this.paused = typeof pluginOptions.paused === 'boolean' ? pluginOptions.paused : false;
 
       /**
        * If true then no output is logged; default: false.
@@ -54,14 +60,13 @@ class Watcher
        * If true then additional verbose output is logged; default: false.
        * @type {boolean}
        */
-      this.verbose = typeof pluginOptions.verbose === 'boolean' ? pluginOptions.verbose : false;
+      this.verbose = typeof pluginOptions.verbose === 'boolean' ? pluginOptions.verbose : true;
 
       /**
        * Tracks the terminal prompt when it is visible.
        * @type {boolean}
        */
       this.promptVisible = false;
-
 
       /**
        * The chokidar watcher instance for source globs.
@@ -85,6 +90,26 @@ class Watcher
    }
 
    /**
+    * Triggers any outbound events if not paused.
+    *
+    * @param {*}  args - event arguments
+    */
+   triggerEvent(...args)
+   {
+      if (!this.paused) { this.eventbus.trigger(...args); }
+   }
+
+   /**
+    * Returns the paused state.
+    *
+    * @returns {boolean}
+    */
+   getPaused()
+   {
+      return this.paused;
+   }
+
+   /**
     * Performs setup and initialization of all chokidar watcher instances and the readline terminal.
     */
    initialize()
@@ -98,6 +123,8 @@ class Watcher
 
       const watcherStartData = {};
 
+      this.eventProxy.on('tjsdoc:system:watcher:pause:get', this.getPaused, this);
+      this.eventProxy.on('tjsdoc:system:watcher:pause:set', this.setPaused, this);
       this.eventProxy.on('tjsdoc:system:watcher:shutdown', this.shutdownCallback, this);
 
       const config = this.eventbus.triggerSync('tjsdoc:data:config:get');
@@ -118,8 +145,7 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - source addition: ${filePath}`);
 
-               this.eventbus.trigger('tjsdoc:system:watcher:update',
-                { action: 'file:added', type: 'source', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:added', type: 'source', filePath });
             });
 
             // On source file changed.
@@ -127,8 +153,7 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - source changed: ${filePath}`);
 
-               this.eventbus.trigger('tjsdoc:system:watcher:update',
-                { action: 'file:changed', type: 'source', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:changed', type: 'source', filePath });
             });
 
             // On source file deleted.
@@ -136,8 +161,7 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - source deletion: ${filePath}`);
 
-               this.eventbus.trigger('tjsdoc:system:watcher:update',
-                { action: 'file:deleted', type: 'source', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'source', filePath });
             });
 
             // Get watched files with relative paths
@@ -169,7 +193,7 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - test addition: ${filePath}`);
 
-               this.eventbus.trigger('tjsdoc:system:watcher:update', { action: 'file:added', type: 'test', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:added', type: 'test', filePath });
             });
 
             // On test file changed.
@@ -177,8 +201,7 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - test changed: ${filePath}`);
 
-               this.eventbus.trigger('tjsdoc:system:watcher:update',
-                { action: 'file:changed', type: 'test', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:changed', type: 'test', filePath });
             });
 
             // On test file deleted.
@@ -186,16 +209,13 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - test deletion: ${filePath}`);
 
-               this.eventbus.trigger('tjsdoc:system:watcher:update',
-                { action: 'file:deleted', type: 'test', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'test', filePath });
             });
 
             // Get watched files with relative paths
             const files = this.testWatcher.getWatched();
 
             watcherStartData.test = { globs: config.test._sourceGlobs, files };
-
-            if (this.promptVisible) { this.logNewLine(); }
 
             this.log(`tjsdoc-plugin-watcher - watching test files: ${JSON.stringify(files)}`);
 
@@ -212,13 +232,15 @@ class Watcher
          // Set terminal readline loop waiting for the user to type in the commands: `restart` or `exit`.
          if (this.terminal)
          {
-            const rlConfig = !this.silent ? { input: process.stdin, output: process.stdout, prompt: '[32mTJSDoc>[0m ' } :
-            { input: process.stdin };
+            const rlConfig = !this.silent ?
+            { input: process.stdin, output: process.stdout, prompt: '[32mTJSDoc>[0m ' } : { input: process.stdin };
 
             this.readline = readline.createInterface(rlConfig);
 
             this.readline.on('line', (line) =>
             {
+               this.promptVisible = false;
+
                switch (line.trim())
                {
                   case 'exit':
@@ -226,8 +248,6 @@ class Watcher
                      break;
 
                   case 'globs':
-                     this.promptVisible = false;
-
                      if (config._sourceGlobs)
                      {
                         this.log(`tjsdoc-plugin-watcher - watching source globs: ${
@@ -248,7 +268,9 @@ class Watcher
                         this.eventbus.trigger('log:info:raw', `[32m  'exit', shutdown watcher[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'globs', list globs being watched[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'help', this listing of commands[0m `);
+                        this.eventbus.trigger('log:info:raw', `[32m  'pause', pauses watcher events & logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m `);
+                        this.eventbus.trigger('log:info:raw', `[32m  'unpause', unpauses watcher events & logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m `);
                         this.eventbus.trigger('log:info:raw', '');
 
@@ -257,23 +279,31 @@ class Watcher
                      }
                      break;
 
+                  case 'pause':
+                     this.log('tjsdoc-plugin-watcher - paused');
+                     this.paused = true;
+                     break;
+
                   case 'regen':
                      setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }));
                      break;
 
-                  case 'watching':
-                     this.promptVisible = false;
+                  case 'unpause':
+                     this.paused = false;
+                     this.log('tjsdoc-plugin-watcher - unpaused');
+                     break;
 
+                  case 'watching':
                      if (this.sourceWatcher)
                      {
                         this.log(`tjsdoc-plugin-watcher - watching source files: ${
-                         JSON.stringify(this.sourceWatcher.relative())}`);
+                         JSON.stringify(this.sourceWatcher.getWatched())}`);
                      }
 
                      if (this.testWatcher)
                      {
                         this.log(`tjsdoc-plugin-watcher - watching test files: ${
-                         JSON.stringify(this.testWatcher.relative())}`);
+                         JSON.stringify(this.testWatcher.getWatched())}`);
                      }
                      break;
 
@@ -313,7 +343,7 @@ class Watcher
     */
    log(message)
    {
-      if (!this.silent)
+      if (!this.silent && !this.paused)
       {
          if (this.promptVisible)
          {
@@ -333,7 +363,7 @@ class Watcher
     */
    logVerbose(message)
    {
-      if (this.verbose && !this.silent)
+      if (this.verbose && !this.silent && !this.paused)
       {
          if (this.promptVisible)
          {
@@ -350,11 +380,23 @@ class Watcher
     */
    processInterruptCallback()
    {
-      if (this.promptVisible) { this.logNewLine(); }
+      if (this.promptVisible) { console.log(''); }
 
       this.eventbus.trigger('log:warn:time', 'tjsdoc-plugin-watcher - received SIGINT; shutting down.');
 
       setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown'));
+   }
+
+   /**
+    * Sets the paused state.
+    *
+    * @param {boolean} paused - The new paused state.
+    */
+   setPaused(paused)
+   {
+      if (typeof paused !== 'boolean') { throw new TypeError(`'paused' is not a 'boolean'.`); }
+
+      this.paused = paused;
    }
 
    /**
