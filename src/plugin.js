@@ -9,58 +9,57 @@ class Watcher
    /**
     * Instantiate Walker then initialize it.
     *
-    * @param {EventProxy}  eventbus - The plugin event proxy.
-    * @param {object}      pluginOptions - The plugin options.
+    * @param {PluginEvent} ev - The `onComplete` plugin event.
     */
-   constructor(eventbus, pluginOptions)
+   constructor(ev)
    {
       /**
        * The plugin event proxy.
        * @type {EventProxy}
        */
-      this.eventbus = eventbus;
+      this.eventbus = ev.eventbus;
 
       /**
        * A local event proxy for Watcher.
        * @type {EventProxy}
        */
-      this.eventProxy = eventbus.createEventProxy();
+      this.eventProxy = ev.eventbus.createEventProxy();
 
       /**
        * The plugin options.
        * @type {object}
        */
-      this.pluginOptions = pluginOptions;
+      this.pluginOptions = ev.pluginOptions;
 
       /**
        * Any chokidar options taken from plugin options.
        * @type {object}
        */
-      this.chokidarOptions = pluginOptions.chokidarOptions || {};
+      this.chokidarOptions = this.pluginOptions.chokidarOptions || {};
 
       /**
        * While true no runtime watcher events are triggered or logging occurs; default: false
        * @type {boolean}
        */
-      this.paused = typeof pluginOptions.paused === 'boolean' ? pluginOptions.paused : false;
+      this.paused = typeof this.pluginOptions.paused === 'boolean' ? this.pluginOptions.paused : false;
 
       /**
        * If true then no output is logged; default: false.
        * @type {boolean}
        */
-      this.silent = typeof pluginOptions.silent === 'boolean' ? pluginOptions.silent : false;
+      this.silent = typeof this.pluginOptions.silent === 'boolean' ? this.pluginOptions.silent : false;
 
       /**
        * If true then an interactive terminal is enabled; default: true.
        * @type {boolean}
        */
-      this.terminal = typeof pluginOptions.terminal === 'boolean' ? pluginOptions.terminal : true;
+      this.terminal = typeof this.pluginOptions.terminal === 'boolean' ? this.pluginOptions.terminal : true;
 
       /**
        * If true then additional verbose output is logged; default: false.
        * @type {boolean}
        */
-      this.verbose = typeof pluginOptions.verbose === 'boolean' ? pluginOptions.verbose : false;
+      this.verbose = typeof this.pluginOptions.verbose === 'boolean' ? this.pluginOptions.verbose : false;
 
       /**
        * Tracks the terminal prompt when it is visible.
@@ -86,7 +85,7 @@ class Watcher
        */
       this.readline = void 0;
 
-      this.initialize();
+      this.initialize(ev.data.config);
    }
 
    /**
@@ -111,12 +110,14 @@ class Watcher
 
    /**
     * Performs setup and initialization of all chokidar watcher instances and the readline terminal.
+    *
+    * @param {TJSDocConfig} config - The TJSDoc config object.
     */
-   initialize()
+   initialize(config)
    {
       /**
        * Tracks the watcher count and when a watcher is started the count is reduced and when `0` is reached then
-       * the `tjsdoc:system:watcher:started` is triggered.
+       * the `tjsdoc:system:watcher:started` event is triggered.
        * @type {number}
        */
       let watcherStartCount = 0;
@@ -126,8 +127,6 @@ class Watcher
       this.eventProxy.on('tjsdoc:system:watcher:pause:get', this.getPaused, this);
       this.eventProxy.on('tjsdoc:system:watcher:pause:set', this.setPaused, this);
       this.eventProxy.on('tjsdoc:system:watcher:shutdown', this.shutdownCallback, this);
-
-      const config = this.eventbus.triggerSync('tjsdoc:data:config:get');
 
       if (config._sourceGlobs)
       {
@@ -457,5 +456,5 @@ export function onComplete(ev)
 {
    ev.data.keepAlive = true;
 
-   new Watcher(ev.eventbus, ev.pluginOptions);
+   new Watcher(ev);
 }
