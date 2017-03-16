@@ -163,16 +163,17 @@ class Watcher
                this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'source', filePath });
             });
 
-            // Get watched files.
-            const files = this.sourceWatcher.getWatched();
-
-            watcherStartData.source = { globs: config._sourceGlobs, files };
-
-            this.log(`tjsdoc-plugin-watcher - watching source files: ${JSON.stringify(files)}`);
+            // Set watcher start data (globs / files).
+            watcherStartData.source = { globs: config._sourceGlobs, files: this.sourceWatcher.getWatched() };
 
             watcherStartCount--;
 
-            if (watcherStartCount === 0) { this.eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData); }
+            if (watcherStartCount === 0)
+            {
+               this.log(`tjsdoc-plugin-watcher - type 'help' for options.`);
+
+               this.eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData);
+            }
          });
       }
 
@@ -211,16 +212,17 @@ class Watcher
                this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'test', filePath });
             });
 
-            // Get watched files.
-            const files = this.testWatcher.getWatched();
-
-            watcherStartData.test = { globs: config.test._sourceGlobs, files };
-
-            this.log(`tjsdoc-plugin-watcher - watching test files: ${JSON.stringify(files)}`);
+            // Set watcher start data (globs / files).
+            watcherStartData.test = { globs: config.test._sourceGlobs, files: this.testWatcher.getWatched() };
 
             watcherStartCount--;
 
-            if (watcherStartCount === 0) { this.eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData); }
+            if (watcherStartCount === 0)
+            {
+               this.log(`tjsdoc-plugin-watcher - type 'help' for options.`);
+
+               this.eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData);
+            }
          });
       }
 
@@ -236,11 +238,22 @@ class Watcher
 
             this.readline = readline.createInterface(rlConfig);
 
+            const showPrompt = () =>
+            {
+               if (!this.silent)
+               {
+                  this.promptVisible = true;
+                  this.readline.prompt();
+               }
+            };
+
             this.readline.on('line', (line) =>
             {
                this.promptVisible = false;
 
-               switch (line.trim())
+               const lineSplit = line.trim().split(' ');
+
+               switch (lineSplit[0])
                {
                   case 'exit':
                      setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown'));
@@ -249,18 +262,17 @@ class Watcher
                   case 'globs':
                      if (config._sourceGlobs)
                      {
-                        this.log(`tjsdoc-plugin-watcher - watching source globs: ${
+                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching source globs: ${
                          JSON.stringify(config._sourceGlobs)}`);
                      }
 
                      if (config.test && config.test._sourceGlobs)
                      {
-                        this.log(`tjsdoc-plugin-watcher - watching test globs: ${
+                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching test globs: ${
                          JSON.stringify(config.test._sourceGlobs)}`);
                      }
 
-                     this.promptVisible = true;
-                     this.readline.prompt();
+                     showPrompt();
                      break;
 
                   case 'help':
@@ -270,27 +282,73 @@ class Watcher
                         this.eventbus.trigger('log:info:raw', `[32m  'exit', shutdown watcher[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'globs', list globs being watched[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'help', this listing of commands[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'pause', pauses watcher events & logging[0m `);
+                        this.eventbus.trigger('log:info:raw',
+                         `[32m  'pause [on/off]', pauses / unpauses watcher events & logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m `);
+                        this.eventbus.trigger('log:info:raw', `[32m  'silent [on/off]', turns on / off logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'status', logs current optional status[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'unpause', unpauses watcher events & logging[0m `);
+                        this.eventbus.trigger('log:info:raw',
+                         `[32m  'verbose [on/off]', turns on / off verbose logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m `);
                         this.eventbus.trigger('log:info:raw', '');
 
-                        this.promptVisible = true;
-                        this.readline.prompt();
+                        showPrompt();
                      }
                      break;
 
                   case 'pause':
-                     this.paused = true;
-                     this.log('tjsdoc-plugin-watcher - paused');
-                     this.promptVisible = true;
-                     this.readline.prompt();
+                     if (typeof lineSplit[1] === 'string')
+                     {
+                        switch (lineSplit[1])
+                        {
+                           case 'off':
+                              this.paused = false;
+                              break;
+
+                           case 'on':
+                              this.paused = true;
+                              break;
+
+                           default:
+                              this.log('tjsdoc-plugin-watcher - pause command malformed; must be `pause [on/off]`');
+                        }
+                     }
+                     else
+                     {
+                        this.log('tjsdoc-plugin-watcher - pause command malformed; must be `pause [on/off]`');
+                     }
+
+                     showPrompt();
                      break;
 
                   case 'regen':
                      setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }));
+                     break;
+
+                  case 'silent':
+                     if (typeof lineSplit[1] === 'string')
+                     {
+                        switch (lineSplit[1])
+                        {
+                           case 'off':
+                              this.silent = false;
+                              break;
+
+                           case 'on':
+                              this.silent = true;
+                              break;
+
+                           default:
+                              this.log('tjsdoc-plugin-watcher - silent command malformed; must be `silent [on/off]`');
+                        }
+                     }
+                     else
+                     {
+                        this.log('tjsdoc-plugin-watcher - silent command malformed; must be `pause [on/off]`');
+                     }
+
+                     showPrompt();
                      break;
 
                   case 'status':
@@ -300,31 +358,47 @@ class Watcher
                      this.eventbus.trigger('log:info:raw', `[32m  verbose: ${this.verbose}[0m `);
                      this.eventbus.trigger('log:info:raw', '');
 
-                     this.promptVisible = true;
-                     this.readline.prompt();
+                     showPrompt();
                      break;
 
-                  case 'unpause':
-                     this.paused = false;
-                     this.log('tjsdoc-plugin-watcher - unpaused');
-                     this.promptVisible = true;
-                     this.readline.prompt();
+                  case 'verbose':
+                     if (typeof lineSplit[1] === 'string')
+                     {
+                        switch (lineSplit[1])
+                        {
+                           case 'off':
+                              this.verbose = false;
+                              break;
+
+                           case 'on':
+                              this.verbose = true;
+                              break;
+
+                           default:
+                              this.log('tjsdoc-plugin-watcher - verbose command malformed; must be `verbose [on/off]`');
+                        }
+                     }
+                     else
+                     {
+                        this.log('tjsdoc-plugin-watcher - verbose command malformed; must be `verbose [on/off]`');
+                     }
+
+                     showPrompt();
                      break;
 
                   case 'watching':
                      if (this.sourceWatcher)
                      {
-                        this.log(`tjsdoc-plugin-watcher - watching source files: ${
+                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching source files: ${
                          JSON.stringify(this.sourceWatcher.getWatched())}`);
                      }
 
                      if (this.testWatcher)
                      {
-                        this.log(`tjsdoc-plugin-watcher - watching test files: ${
+                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching test files: ${
                          JSON.stringify(this.testWatcher.getWatched())}`);
                      }
-                     this.promptVisible = true;
-                     this.readline.prompt();
+                     showPrompt();
                      break;
 
                   default:
@@ -332,11 +406,7 @@ class Watcher
 
                   // eslint-disable-next-line no-fallthrough
                   case '':
-                     if (!this.silent)
-                     {
-                        this.promptVisible = true;
-                        this.readline.prompt();
-                     }
+                     showPrompt();
                      break;
                }
             });
