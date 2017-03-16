@@ -13,7 +13,7 @@ const s_DEV_TARGET =
    type: 'ecmascript'
 };
 
-const s_DEBUG_LOG = true;
+const s_DEBUG_LOG = false;
 
 const log = (message) =>
 {
