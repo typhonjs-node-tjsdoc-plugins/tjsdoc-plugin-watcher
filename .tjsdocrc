@@ -1,4 +1,3 @@
-/* Some comments! You can include comments in TJSDoc config files */
 {
   "source": ["src", "test/dest/main"],
   "destination": "docs",
