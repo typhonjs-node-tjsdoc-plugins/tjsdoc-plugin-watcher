@@ -199,6 +199,46 @@ describe('tjsdoc-plugin-watcher', () =>
 
       Util.invoke(s_DEV_TARGET, config, { modConfig: false, silent: false });
    });
+
+   it('Event bindings', (done) =>
+   {
+      s_PERFORM_INIT_TEST(eventProxy, true, () =>
+      {
+         const globs = eventProxy.triggerSync('tjsdoc:system:watcher:globs:get');
+         let options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
+         const watching = eventProxy.triggerSync('tjsdoc:system:watcher:watching:get', { relative: true });
+
+         Util.assert.strictEqual(JSON.stringify(globs), '{"source":["src/**/*","test/dest/main/**/*"],"test":["test/dest/test/**/*"]}');
+         Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(watching), '{"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["plugin.js"]}},"test":{"globs":["test/dest/test/**/*"],"files":{}}}');
+
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: true });
+         options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
+         Util.assert.strictEqual(JSON.stringify(options), '{"paused":true,"silent":false,"verbose":false}');
+
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { silent: true });
+         options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
+         Util.assert.strictEqual(JSON.stringify(options), '{"paused":true,"silent":true,"verbose":false}');
+
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { verbose: true });
+         options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
+         Util.assert.strictEqual(JSON.stringify(options), '{"paused":true,"silent":true,"verbose":true}');
+
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: false, silent: false });
+         options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
+         Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":true}');
+
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: false, verbose: false });
+         options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
+         Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":false}');
+
+         eventProxy.trigger('tjsdoc:system:watcher:shutdown');
+      });
+
+      eventProxy.on('tjsdoc:system:shutdown', () => done());
+
+      Util.invoke(s_DEV_TARGET, './.tjsdocrc', { modConfig: false, silent: false });
+   });
 });
 
 const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
@@ -240,9 +280,6 @@ const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
          const relKey = path.relative('.', key);
          data.source.files[relKey] = data.source.files[key];
          delete data.source.files[key];
-
-         // Filter out '.DS_Store' which may be present on MacOS.
-         data.source.files[relKey] = data.source.files[relKey].filter((entry) => !entry.startsWith('.'));
       }
 
       for (const key in data.test.files)
@@ -250,9 +287,6 @@ const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
          const relKey = path.relative('.', key);
          data.test.files[relKey] = data.test.files[key];
          delete data.source.files[key];
-
-         // Filter out '.DS_Store' which may be present on MacOS.
-         data.test.files[relKey] = data.test.files[relKey].filter((entry) => !entry.startsWith('.'));
       }
 
       // Test separately as order of addition may be swapped.
