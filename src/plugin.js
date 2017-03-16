@@ -33,13 +33,13 @@ class Watcher
       this.pluginOptions = pluginOptions;
 
       /**
-       * Any Chokidar options taken from plugin options.
+       * Any chokidar options taken from plugin options.
        * @type {object}
        */
       this.chokidarOptions = pluginOptions.chokidarOptions || {};
 
       /**
-       * While true no events are triggered or logging occurs; default: false
+       * While true no runtime watcher events are triggered or logging occurs; default: false
        * @type {boolean}
        */
       this.paused = typeof pluginOptions.paused === 'boolean' ? pluginOptions.paused : false;
@@ -60,7 +60,7 @@ class Watcher
        * If true then additional verbose output is logged; default: false.
        * @type {boolean}
        */
-      this.verbose = typeof pluginOptions.verbose === 'boolean' ? pluginOptions.verbose : true;
+      this.verbose = typeof pluginOptions.verbose === 'boolean' ? pluginOptions.verbose : false;
 
       /**
        * Tracks the terminal prompt when it is visible.
@@ -164,7 +164,7 @@ class Watcher
                this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'source', filePath });
             });
 
-            // Get watched files with relative paths
+            // Get watched files.
             const files = this.sourceWatcher.getWatched();
 
             watcherStartData.source = { globs: config._sourceGlobs, files };
@@ -212,7 +212,7 @@ class Watcher
                this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'test', filePath });
             });
 
-            // Get watched files with relative paths
+            // Get watched files.
             const files = this.testWatcher.getWatched();
 
             watcherStartData.test = { globs: config.test._sourceGlobs, files };
@@ -439,10 +439,9 @@ class Watcher
 
       this.logVerbose('tjsdoc-plugin-watcher - watcher(s) stopped.');
 
-      // If no more watcher instances are active then trigger the stopped event and if any function is set for
-      // `watcherCloseFunction` then execute it.
       this.eventbus.trigger('tjsdoc:system:watcher:stopped');
 
+      // Either regenerate all docs or invoke the shutdown event.
       this.eventbus.trigger(regenerate ? 'tjsdoc:system:regenerate:all:docs' : 'tjsdoc:system:shutdown');
    }
 }
