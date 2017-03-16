@@ -258,6 +258,9 @@ class Watcher
                         this.log(`tjsdoc-plugin-watcher - watching test globs: ${
                          JSON.stringify(config.test._sourceGlobs)}`);
                      }
+
+                     this.promptVisible = true;
+                     this.readline.prompt();
                      break;
 
                   case 'help':
@@ -269,6 +272,7 @@ class Watcher
                         this.eventbus.trigger('log:info:raw', `[32m  'help', this listing of commands[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'pause', pauses watcher events & logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m `);
+                        this.eventbus.trigger('log:info:raw', `[32m  'status', logs current optional status[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'unpause', unpauses watcher events & logging[0m `);
                         this.eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m `);
                         this.eventbus.trigger('log:info:raw', '');
@@ -279,17 +283,32 @@ class Watcher
                      break;
 
                   case 'pause':
-                     this.log('tjsdoc-plugin-watcher - paused');
                      this.paused = true;
+                     this.log('tjsdoc-plugin-watcher - paused');
+                     this.promptVisible = true;
+                     this.readline.prompt();
                      break;
 
                   case 'regen':
                      setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }));
                      break;
 
+                  case 'status':
+                     this.eventbus.trigger('log:info:raw', '[32mtjsdoc-plugin-watcher - status:[0m ');
+                     this.eventbus.trigger('log:info:raw', `[32m  paused: ${this.paused}[0m `);
+                     this.eventbus.trigger('log:info:raw', `[32m  silent: ${this.silent}[0m `);
+                     this.eventbus.trigger('log:info:raw', `[32m  verbose: ${this.verbose}[0m `);
+                     this.eventbus.trigger('log:info:raw', '');
+
+                     this.promptVisible = true;
+                     this.readline.prompt();
+                     break;
+
                   case 'unpause':
                      this.paused = false;
                      this.log('tjsdoc-plugin-watcher - unpaused');
+                     this.promptVisible = true;
+                     this.readline.prompt();
                      break;
 
                   case 'watching':
@@ -304,6 +323,8 @@ class Watcher
                         this.log(`tjsdoc-plugin-watcher - watching test files: ${
                          JSON.stringify(this.testWatcher.getWatched())}`);
                      }
+                     this.promptVisible = true;
+                     this.readline.prompt();
                      break;
 
                   default:
