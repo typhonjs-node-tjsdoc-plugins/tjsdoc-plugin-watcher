@@ -305,14 +305,14 @@ const s_PERFORM_CHANGES = (eventProxy, shutdownCallback) =>
 
    const verifyInfo =
    {
-      '{"action":"file:added","type":"test","filePath":"test/dest/test/test.js"}': false,
-      '{"action":"file:added","type":"source","filePath":"test/dest/main/source.js"}': false,
-      '{"action":"file:added","type":"test","filePath":"test/dest/test/test2.js"}': false,
-      '{"action":"file:added","type":"source","filePath":"test/dest/main/source2.js"}': false,
-      '{"action":"file:changed","type":"source","filePath":"test/dest/main/source2.js"}': false,
-      '{"action":"file:changed","type":"test","filePath":"test/dest/test/test2.js"}': false,
-      '{"action":"file:deleted","type":"test","filePath":"test/dest/test/test2.js"}': false,
-      '{"action":"file:deleted","type":"source","filePath":"test/dest/main/source2.js"}': false
+      '{"action":"file:added","type":"test","path":"test/dest/test/test.js"}': false,
+      '{"action":"file:added","type":"source","path":"test/dest/main/source.js"}': false,
+      '{"action":"file:added","type":"test","path":"test/dest/test/test2.js"}': false,
+      '{"action":"file:added","type":"source","path":"test/dest/main/source2.js"}': false,
+      '{"action":"file:changed","type":"source","path":"test/dest/main/source2.js"}': false,
+      '{"action":"file:changed","type":"test","path":"test/dest/test/test2.js"}': false,
+      '{"action":"file:deleted","type":"test","path":"test/dest/test/test2.js"}': false,
+      '{"action":"file:deleted","type":"source","path":"test/dest/main/source2.js"}': false
    };
 
    eventProxy.on('tjsdoc:system:watcher:update', (data) =>

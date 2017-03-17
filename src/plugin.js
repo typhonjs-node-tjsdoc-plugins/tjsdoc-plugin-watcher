@@ -280,27 +280,27 @@ class Watcher
          this.sourceWatcher.on('ready', () =>
          {
             // On source file added.
-            this.sourceWatcher.on('add', (filePath) =>
+            this.sourceWatcher.on('add', (path) =>
             {
-               this.logVerbose(`tjsdoc-plugin-watcher - source addition: ${filePath}`);
+               this.logVerbose(`tjsdoc-plugin-watcher - source addition: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:added', type: 'source', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:added', type: 'source', path });
             });
 
             // On source file changed.
-            this.sourceWatcher.on('change', (filePath) =>
+            this.sourceWatcher.on('change', (path) =>
             {
-               this.logVerbose(`tjsdoc-plugin-watcher - source changed: ${filePath}`);
+               this.logVerbose(`tjsdoc-plugin-watcher - source changed: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:changed', type: 'source', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:changed', type: 'source', path });
             });
 
             // On source file deleted.
-            this.sourceWatcher.on('unlink', (filePath) =>
+            this.sourceWatcher.on('unlink', (path) =>
             {
-               this.logVerbose(`tjsdoc-plugin-watcher - source deletion: ${filePath}`);
+               this.logVerbose(`tjsdoc-plugin-watcher - source deletion: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'source', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'source', path });
             });
 
             // Set watcher start data (globs / files).
@@ -332,27 +332,27 @@ class Watcher
          this.testWatcher.on('ready', () =>
          {
             // On test file added.
-            this.testWatcher.on('add', (filePath) =>
+            this.testWatcher.on('add', (path) =>
             {
-               this.logVerbose(`tjsdoc-plugin-watcher - test addition: ${filePath}`);
+               this.logVerbose(`tjsdoc-plugin-watcher - test addition: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:added', type: 'test', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:added', type: 'test', path });
             });
 
             // On test file changed.
-            this.testWatcher.on('change', (filePath) =>
+            this.testWatcher.on('change', (path) =>
             {
-               this.logVerbose(`tjsdoc-plugin-watcher - test changed: ${filePath}`);
+               this.logVerbose(`tjsdoc-plugin-watcher - test changed: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:changed', type: 'test', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:changed', type: 'test', path });
             });
 
             // On test file deleted.
-            this.testWatcher.on('unlink', (filePath) =>
+            this.testWatcher.on('unlink', (path) =>
             {
-               this.logVerbose(`tjsdoc-plugin-watcher - test deletion: ${filePath}`);
+               this.logVerbose(`tjsdoc-plugin-watcher - test deletion: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'test', filePath });
+               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:deleted', type: 'test', path });
             });
 
             // Set watcher start data (globs / files).
