@@ -179,7 +179,7 @@ describe('tjsdoc-plugin-watcher', () =>
          if (message.startsWith('tjsdoc-plugin-watcher - source deletion')) { verifyInfo.sourceDeleted = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - test deletion')) { verifyInfo.testDeleted = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - shutdown requested')) { verifyInfo.shutdownRequested = true; }
-         if (message.startsWith('tjsdoc-plugin-watcher - watcher(s) stopped')) { verifyInfo.watchersStopped = true; }
+         if (message.startsWith('tjsdoc-plugin-watcher - watching stopped')) { verifyInfo.watchersStopped = true; }
       });
 
       config.plugins = [{ name: './src/plugin.js', options: { verbose: true } }];
