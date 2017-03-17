@@ -3,6 +3,12 @@ import mainEventbus  from 'backbone-esnext-eventbus';
 import path          from 'path';
 import Util          from 'tjsdoc-test-utils';
 
+/**
+ * `backbone-esnext-eventbus is remapped in `.babelrc` for dev-test NPM script to point to
+ * `../../typhonjs-node-tjsdoc/tjsdoc/node_modules/backbone-esnext-eventbus/dist/eventbus.js` to link it to executing
+ * eventbus from `../../typhonjs-node-tjsdoc/tjsdoc/src/TJSDoc.js`.
+ */
+
 const s_DEV_TARGET =
 {
    name: 'babylon',
@@ -21,17 +27,13 @@ const log = (message) =>
 };
 
 const s_VERIFY_INIT_SOURCE = '["src/**/*","test/dest/main/**/*"]';
-const s_VERIFY_INIT_TEST = '["test/dest/test/**/*"]';
+const s_VERIFY_INIT_TEST = '["test/src/**/*","test/dest/test/**/*"]';
 
 const s_VERIFY_START_SOURCE = '{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["plugin.js"]}}';
-const s_VERIFY_START_TEST = '{"globs":["test/dest/test/**/*"],"files":{}}';
+const s_VERIFY_START_TEST = '{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["plugin.js"]}}';
 
 /**
- * `backbone-esnext-eventbus is remapped in `.babelrc` for dev-test NPM script to point to
- * `../../typhonjs-node-tjsdoc/tjsdoc/node_modules/backbone-esnext-eventbus/dist/eventbus.js` to link it to executing
- * eventbus from `../../typhonjs-node-tjsdoc/tjsdoc/src/TJSDoc.js`.
- *
- * @test {plugin.js} *
+ * @test {Watcher}
  */
 describe('tjsdoc-plugin-watcher', () =>
 {
@@ -208,9 +210,9 @@ describe('tjsdoc-plugin-watcher', () =>
          let options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
          const watching = eventProxy.triggerSync('tjsdoc:system:watcher:watching:get', { relative: true });
 
-         Util.assert.strictEqual(JSON.stringify(globs), '{"source":["src/**/*","test/dest/main/**/*"],"test":["test/dest/test/**/*"]}');
+         Util.assert.strictEqual(JSON.stringify(globs), '{"source":["src/**/*","test/dest/main/**/*"],"test":["test/src/**/*","test/dest/test/**/*"]}');
          Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":false}');
-         Util.assert.strictEqual(JSON.stringify(watching), '{"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["plugin.js"]}},"test":{"globs":["test/dest/test/**/*"],"files":{}}}');
+         Util.assert.strictEqual(JSON.stringify(watching), '{"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["plugin.js"]}},"test":{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["plugin.js"]}}}');
 
          eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: true });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
@@ -286,7 +288,7 @@ const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
       {
          const relKey = path.relative('.', key);
          data.test.files[relKey] = data.test.files[key];
-         delete data.source.files[key];
+         delete data.test.files[key];
       }
 
       // Test separately as order of addition may be swapped.
