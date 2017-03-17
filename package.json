@@ -1,7 +1,7 @@
 {
   "name": "tjsdoc-plugin-watcher",
   "version": "0.0.1",
-  "description": "Provides file watching functionality to efficiently and incrementally rebuild generated docs (experimental!).",
+  "description": "Provides file watching control and event bindings which other plugins may consume.",
   "author": "typhonrt",
   "homepage": "https://tjsdoc.typhonjs.io/",
   "license": "MPL-2.0",
@@ -30,8 +30,9 @@
   "keywords": [
     "typhonjs",
     "tjsdoc",
-    "runtime",
-    "babylon"
+    "plugin",
+    "file",
+    "watcher"
   ],
   "files": [
     "dist",
