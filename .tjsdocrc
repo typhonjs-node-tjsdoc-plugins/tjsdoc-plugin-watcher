@@ -7,7 +7,7 @@
 
   "test": {
     "type": "mocha",
-    "source": "test/dest/test"
+    "source": ["test/src", "test/dest/test"]
   },
 
   "plugins": [ { "name": "./src/plugin.js" } ]
