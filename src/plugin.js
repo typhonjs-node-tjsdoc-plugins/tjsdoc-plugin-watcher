@@ -373,7 +373,8 @@ class Watcher
       {
          process.on('SIGINT', this.processInterruptCallback);
 
-         // Set terminal readline loop waiting for the user to type in the commands: `restart` or `exit`.
+         // Set terminal readline loop waiting for the user to type in the commands: `exit`, `globs`, `help`, `pause`,
+         // `regen`, `silent`, `status`, `verbose`, `watching`.
          if (this.terminal)
          {
             const rlConfig = !this.silent ?
@@ -405,38 +406,34 @@ class Watcher
                   case 'globs':
                      if (config._sourceGlobs)
                      {
-                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching source globs: ${
-                         JSON.stringify(config._sourceGlobs)}`);
+                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source globs: ${
+                         JSON.stringify(config._sourceGlobs)}[0m`);
                      }
 
                      if (config.test && config.test._sourceGlobs)
                      {
-                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching test globs: ${
-                         JSON.stringify(config.test._sourceGlobs)}`);
+                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test globs: ${
+                         JSON.stringify(config.test._sourceGlobs)}[0m`);
                      }
 
                      showPrompt();
                      break;
 
                   case 'help':
-                     if (!this.silent)
-                     {
-                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - options:[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'exit', shutdown watcher[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'globs', list globs being watched[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'help', this listing of commands[0m `);
-                        this.eventbus.trigger('log:info:raw',
-                         `[32m  'pause [on/off]', pauses / unpauses watcher events & logging[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'silent [on/off]', turns on / off logging[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'status', logs current optional status[0m `);
-                        this.eventbus.trigger('log:info:raw',
-                         `[32m  'verbose [on/off]', turns on / off verbose logging[0m `);
-                        this.eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m `);
-                        this.eventbus.trigger('log:info:raw', '');
+                     this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - options:[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  'exit', shutdown watcher[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  'globs', list globs being watched[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  'help', this listing of commands[0m`);
+                     this.eventbus.trigger('log:info:raw',
+                      `[32m  'pause [on/off]', pauses / unpauses watcher events & logging[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  'silent [on/off]', turns on / off logging[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  'status', logs current optional status[0m`);
+                     this.eventbus.trigger('log:info:raw',
+                      `[32m  'verbose [on/off]', turns on / off verbose logging[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m`);
 
-                        showPrompt();
-                     }
+                     showPrompt();
                      break;
 
                   case 'pause':
@@ -453,12 +450,14 @@ class Watcher
                               break;
 
                            default:
-                              this.log('tjsdoc-plugin-watcher - pause command malformed; must be `pause [on/off]`');
+                              this.eventbus.trigger('log:info:raw',
+                               `[32mtjsdoc-plugin-watcher - pause command malformed; must be 'pause [on/off]'[0m`);
                         }
                      }
                      else
                      {
-                        this.log('tjsdoc-plugin-watcher - pause command malformed; must be `pause [on/off]`');
+                        this.eventbus.trigger('log:info:raw',
+                         `[32mtjsdoc-plugin-watcher - pause command malformed; must be 'pause [on/off]'[0m`);
                      }
 
                      showPrompt();
@@ -482,22 +481,24 @@ class Watcher
                               break;
 
                            default:
-                              this.log('tjsdoc-plugin-watcher - silent command malformed; must be `silent [on/off]`');
+                              this.eventbus.trigger('log:info:raw',
+                               `[32mtjsdoc-plugin-watcher - silent command malformed; must be 'silent [on/off]'[0m`);
                         }
                      }
                      else
                      {
-                        this.log('tjsdoc-plugin-watcher - silent command malformed; must be `pause [on/off]`');
+                        this.eventbus.trigger('log:info:raw',
+                         `[32mtjsdoc-plugin-watcher - silent command malformed; must be 'pause [on/off]'[0m`);
                      }
 
                      showPrompt();
                      break;
 
                   case 'status':
-                     this.eventbus.trigger('log:info:raw', '[32mtjsdoc-plugin-watcher - status:[0m ');
-                     this.eventbus.trigger('log:info:raw', `[32m  paused: ${this.paused}[0m `);
-                     this.eventbus.trigger('log:info:raw', `[32m  silent: ${this.silent}[0m `);
-                     this.eventbus.trigger('log:info:raw', `[32m  verbose: ${this.verbose}[0m `);
+                     this.eventbus.trigger('log:info:raw', '[32mtjsdoc-plugin-watcher - status:[0m');
+                     this.eventbus.trigger('log:info:raw', `[32m  paused: ${this.paused}[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  silent: ${this.silent}[0m`);
+                     this.eventbus.trigger('log:info:raw', `[32m  verbose: ${this.verbose}[0m`);
                      this.eventbus.trigger('log:info:raw', '');
 
                      showPrompt();
@@ -517,12 +518,14 @@ class Watcher
                               break;
 
                            default:
-                              this.log('tjsdoc-plugin-watcher - verbose command malformed; must be `verbose [on/off]`');
+                              this.eventbus.trigger('log:info:raw',
+                               `[32mtjsdoc-plugin-watcher - verbose command malformed; must be 'verbose [on/off]'[0m`);
                         }
                      }
                      else
                      {
-                        this.log('tjsdoc-plugin-watcher - verbose command malformed; must be `verbose [on/off]`');
+                        this.eventbus.trigger('log:info:raw',
+                         `[32mtjsdoc-plugin-watcher - verbose command malformed; must be 'verbose [on/off]'[0m`);
                      }
 
                      showPrompt();
@@ -531,20 +534,21 @@ class Watcher
                   case 'watching':
                      if (this.sourceWatcher)
                      {
-                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching source files: ${
-                         JSON.stringify(this.sourceWatcher.getWatched())}`);
+                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source files: ${
+                         JSON.stringify(this.sourceWatcher.getWatched())}[0m`);
                      }
 
                      if (this.testWatcher)
                      {
-                        this.eventbus.trigger('log:info:time', `tjsdoc-plugin-watcher - watching test files: ${
-                         JSON.stringify(this.testWatcher.getWatched())}`);
+                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test files: ${
+                         JSON.stringify(this.testWatcher.getWatched())}[0m`);
                      }
                      showPrompt();
                      break;
 
                   default:
-                     this.log(`tjsdoc-plugin-watcher - unknown command (type 'help' for instructions)`);
+                     this.eventbus.trigger('log:info:raw',
+                      `[32mtjsdoc-plugin-watcher - unknown command (type 'help' for instructions)[0m`);
 
                   // eslint-disable-next-line no-fallthrough
                   case '':
@@ -671,9 +675,9 @@ class Watcher
          this.sourceWatcher = void 0;
       }
 
-      this.logVerbose('tjsdoc-plugin-watcher - watcher(s) stopped.');
-
       this.eventbus.trigger('tjsdoc:system:watcher:stopped');
+
+      this.logVerbose('tjsdoc-plugin-watcher - watching stopped.');
 
       // Either regenerate all docs or invoke the shutdown event.
       this.eventbus.trigger(regenerate ? 'tjsdoc:system:regenerate:all:docs' : 'tjsdoc:system:shutdown');
