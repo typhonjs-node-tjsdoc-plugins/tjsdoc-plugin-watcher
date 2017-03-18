@@ -165,8 +165,8 @@ describe('tjsdoc-plugin-watcher', () =>
          testAdded: false,
          sourceChanged: false,
          testChanged: false,
-         sourceDeleted: false,
-         testDeleted: false,
+         sourceUnlinked: false,
+         testUnlinked: false,
          shutdownRequested: false,
          watchersStopped: false
       };
@@ -178,8 +178,8 @@ describe('tjsdoc-plugin-watcher', () =>
          if (message.startsWith('tjsdoc-plugin-watcher - test addition')) { verifyInfo.testAdded = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - source changed')) { verifyInfo.sourceChanged = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - test changed')) { verifyInfo.testChanged = true; }
-         if (message.startsWith('tjsdoc-plugin-watcher - source deletion')) { verifyInfo.sourceDeleted = true; }
-         if (message.startsWith('tjsdoc-plugin-watcher - test deletion')) { verifyInfo.testDeleted = true; }
+         if (message.startsWith('tjsdoc-plugin-watcher - source unlinked')) { verifyInfo.sourceUnlinked = true; }
+         if (message.startsWith('tjsdoc-plugin-watcher - test unlinked')) { verifyInfo.testUnlinked = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - shutdown requested')) { verifyInfo.shutdownRequested = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - watching stopped')) { verifyInfo.watchersStopped = true; }
       });
@@ -301,18 +301,18 @@ const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
 
 const s_PERFORM_CHANGES = (eventProxy, shutdownCallback) =>
 {
-   let deleteCount = 2;
+   let unlinkCount = 2;
 
    const verifyInfo =
    {
-      '{"action":"file:added","type":"test","path":"test/dest/test/test.js"}': false,
-      '{"action":"file:added","type":"source","path":"test/dest/main/source.js"}': false,
-      '{"action":"file:added","type":"test","path":"test/dest/test/test2.js"}': false,
-      '{"action":"file:added","type":"source","path":"test/dest/main/source2.js"}': false,
-      '{"action":"file:changed","type":"source","path":"test/dest/main/source2.js"}': false,
-      '{"action":"file:changed","type":"test","path":"test/dest/test/test2.js"}': false,
-      '{"action":"file:deleted","type":"test","path":"test/dest/test/test2.js"}': false,
-      '{"action":"file:deleted","type":"source","path":"test/dest/main/source2.js"}': false
+      '{"action":"file:add","type":"test","path":"test/dest/test/test.js"}': false,
+      '{"action":"file:add","type":"source","path":"test/dest/main/source.js"}': false,
+      '{"action":"file:add","type":"test","path":"test/dest/test/test2.js"}': false,
+      '{"action":"file:add","type":"source","path":"test/dest/main/source2.js"}': false,
+      '{"action":"file:change","type":"source","path":"test/dest/main/source2.js"}': false,
+      '{"action":"file:change","type":"test","path":"test/dest/test/test2.js"}': false,
+      '{"action":"file:unlink","type":"test","path":"test/dest/test/test2.js"}': false,
+      '{"action":"file:unlink","type":"source","path":"test/dest/main/source2.js"}': false
    };
 
    eventProxy.on('tjsdoc:system:watcher:update', (data) =>
@@ -323,11 +323,11 @@ const s_PERFORM_CHANGES = (eventProxy, shutdownCallback) =>
 
       verifyInfo[dataString] = true;
 
-      if (data.action === 'file:deleted')
+      if (data.action === 'file:unlink')
       {
-         deleteCount--;
+         unlinkCount--;
 
-         if (deleteCount <= 0)
+         if (unlinkCount <= 0)
          {
             for (const key in verifyInfo)
             {
