@@ -1,4 +1,5 @@
 import chokidar   from 'chokidar';
+import fs         from 'fs';
 import path       from 'path';
 import readline   from 'readline';
 
@@ -158,6 +159,41 @@ class Watcher
    }
 
    /**
+    * Performs the ignored match against the path against the `_includes` and `_excludes` entries in the given
+    * `config` object.
+    *
+    * @param {string}   path - file / directory path.
+    *
+    * @param {object}   config - object to use for `_includes` and `_excludes`.
+    *
+    * @returns {boolean}
+    */
+   ignoredMatch(path, config)
+   {
+      let ignored = false;
+
+      let match = false;
+
+      for (const reg of config._includes)
+      {
+         if (path.match(reg))
+         {
+            match = true;
+            break;
+         }
+      }
+
+      if (!match) { ignored = true; }
+
+      for (const reg of this.config._excludes)
+      {
+         if (path.match(reg)) { ignored = true; }
+      }
+
+      return ignored;
+   }
+
+   /**
     * Provides an `ignores` function consumable by chokidar `options.ignored`. `config._includes` and `config._excludes`
     * is used to provide additional file filtering.
     *
@@ -168,36 +204,16 @@ class Watcher
     */
    ignoredSource(path, stats)
    {
-      if (stats)
-      {
-         // Don't ignore any directories.
-         if (stats.isDirectory()) { return false; }
+      let ignored = false;
 
-         if (stats.isFile())
-         {
-            let match = false;
+      // Attempt to retrieve fs.Stats; this may fail, but match against the path regardless.
+      try { stats = stats || fs.lstatSync(path); }
+      catch (err) { ignored = this.ignoredMatch(path, this.config); }
 
-            for (const reg of this.config._includes)
-            {
-               if (path.match(reg))
-               {
-                  match = true;
-                  break;
-               }
-            }
+      // Match all files.
+      if (stats && stats.isFile()) { ignored = this.ignoredMatch(path, this.config); }
 
-            if (!match) { return true; }
-
-            for (const reg of this.config._excludes)
-            {
-               if (path.match(reg)) { return true; }
-            }
-
-            return false;
-         }
-      }
-
-      return false;
+      return ignored;
    }
 
    /**
@@ -211,36 +227,16 @@ class Watcher
     */
    ignoredTest(path, stats)
    {
-      if (stats)
-      {
-         // Don't ignore any directories.
-         if (stats.isDirectory()) { return false; }
+      let ignored = false;
 
-         if (stats.isFile())
-         {
-            let match = false;
+      // Attempt to retrieve fs.Stats; this may fail, but match against the path regardless.
+      try { stats = stats || fs.lstatSync(path); }
+      catch (err) { ignored = this.ignoredMatch(path, this.config.test); }
 
-            for (const reg of this.config.test._includes)
-            {
-               if (path.match(reg))
-               {
-                  match = true;
-                  break;
-               }
-            }
+      // Match all files.
+      if (stats && stats.isFile()) { ignored = this.ignoredMatch(path, this.config.test); }
 
-            if (!match) { return true; }
-
-            for (const reg of this.config.test._excludes)
-            {
-               if (path.match(reg)) { return true; }
-            }
-
-            return false;
-         }
-      }
-
-      return false;
+      return ignored;
    }
 
    /**
