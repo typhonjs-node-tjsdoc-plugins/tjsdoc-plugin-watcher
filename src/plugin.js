@@ -185,7 +185,7 @@ class Watcher
 
       if (!match) { ignored = true; }
 
-      for (const reg of this.config._excludes)
+      for (const reg of config._excludes)
       {
          if (path.match(reg)) { ignored = true; }
       }
