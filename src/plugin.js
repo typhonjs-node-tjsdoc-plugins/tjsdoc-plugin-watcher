@@ -409,7 +409,7 @@ class Watcher
                switch (lineSplit[0])
                {
                   case 'exit':
-                     this.readline.close();
+                     setImmediate(() => this.readline.close());
                      break;
 
                   case 'globs':
