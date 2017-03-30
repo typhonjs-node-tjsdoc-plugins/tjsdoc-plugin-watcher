@@ -367,11 +367,14 @@ class Watcher
 
       if (config._sourceGlobs || (config.test && config.test._sourceGlobs))
       {
-         process.on('SIGINT', this.processInterruptCallback);
-
-         // Set terminal readline loop waiting for the user to type in the commands: `exit`, `globs`, `help`, `pause`,
-         // `regen`, `silent`, `status`, `verbose`, `watching`.
-         if (this.terminal)
+         // If there is no terminal enabled hook into process SIGINT event. Otherwise set terminal readline loop
+         // waiting for the user to type in the commands: `exit`, `globs`, `help`, `pause`, `regen`, `silent`,
+         // `status`, `verbose`, `watching`.
+         if (!this.terminal)
+         {
+            process.on('SIGINT', this.processInterruptCallback.bind(this));
+         }
+         else
          {
             const rlConfig = !this.silent ?
             { input: process.stdin, output: process.stdout, prompt: '[32mTJSDoc>[0m ' } : { input: process.stdin };
@@ -387,6 +390,16 @@ class Watcher
                }
             };
 
+            // Readline will catch Ctrl-C / Ctrl-D and emit the close event.
+            this.readline.on('close', () =>
+            {
+               if (this.readline)
+               {
+                  this.readline = void 0;
+                  setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown'));
+               }
+            });
+
             this.readline.on('line', (line) =>
             {
                this.promptVisible = false;
@@ -396,7 +409,7 @@ class Watcher
                switch (lineSplit[0])
                {
                   case 'exit':
-                     setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown'));
+                     this.readline.close();
                      break;
 
                   case 'globs':
@@ -646,13 +659,18 @@ class Watcher
       const regenerate = typeof options === 'object' && typeof options.regenerate === 'boolean' ?
        options.regenerate : false;
 
+      if (this.promptVisible) { console.log(''); }
+
       this.logVerbose(`tjsdoc-plugin-watcher - shutdown requested${regenerate ? ' with regeneration' : ''}.`);
 
       this.promptVisible = false;
 
-      if (this.readline) { this.readline.close(); }
-
-      this.readline = void 0;
+      if (this.readline)
+      {
+         const rl = this.readline;
+         this.readLine = void 0;
+         rl.close();
+      }
 
       // Removes any locally added event bindings.
       this.eventProxy.off();
