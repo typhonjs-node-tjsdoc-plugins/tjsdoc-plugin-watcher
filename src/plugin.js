@@ -3,6 +3,8 @@ import fs         from 'fs';
 import path       from 'path';
 import readline   from 'readline';
 
+let watcher;
+
 /**
  * Provides file watching control flow for TJSDoc during the `onComplete` callback.
  */
@@ -28,10 +30,10 @@ class Watcher
       this.eventProxy = ev.eventbus.createEventProxy();
 
       /**
-       * The target project TJSDocConfig object.
-       * @type {TJSDocConfig}
+       * Stores a hash of supported terminal commands.
+       * @type {{}}
        */
-      this.config = ev.data.config;
+      this.commands = {};
 
       /**
        * The plugin options.
@@ -93,7 +95,12 @@ class Watcher
        */
       this.readline = void 0;
 
-      this.initialize(ev.data.config);
+      ev.eventbus.on('tjsdoc:system:watcher:command:add', this.addCommand, this);
+      ev.eventbus.on('tjsdoc:system:watcher:globs:get', this.getGlobs, this);
+      ev.eventbus.on('tjsdoc:system:watcher:options:get', this.getOptions, this);
+      ev.eventbus.on('tjsdoc:system:watcher:options:set', this.setOptions, this);
+
+      this.initializeCommands();
    }
 
    /**
@@ -247,6 +254,12 @@ class Watcher
    initialize(config)
    {
       /**
+       * The target project TJSDocConfig object.
+       * @type {TJSDocConfig}
+       */
+      this.config = config;
+
+      /**
        * Tracks the watcher count and when a watcher is started the count is reduced and when `0` is reached then
        * the `tjsdoc:system:watcher:started` event is triggered.
        * @type {number}
@@ -255,9 +268,6 @@ class Watcher
 
       const watcherStartData = { source: { globs: [], files: {} }, test: { globs: [], files: {} } };
 
-      this.eventProxy.on('tjsdoc:system:watcher:globs:get', this.getGlobs, this);
-      this.eventProxy.on('tjsdoc:system:watcher:options:get', this.getOptions, this);
-      this.eventProxy.on('tjsdoc:system:watcher:options:set', this.setOptions, this);
       this.eventProxy.on('tjsdoc:system:watcher:shutdown', this.shutdownCallback, this);
       this.eventProxy.on('tjsdoc:system:watcher:watching:get', this.getWatching, this);
 
@@ -369,7 +379,8 @@ class Watcher
       {
          // If there is no terminal enabled hook into process SIGINT event. Otherwise set terminal readline loop
          // waiting for the user to type in the commands: `exit`, `globs`, `help`, `pause`, `regen`, `silent`,
-         // `status`, `verbose`, `watching`.
+         // `status`, `verbose`, `watching`. The readline terminal will hook into SIGINT (`Ctrl-C`) & SIGHUP (`Ctrl-D`)
+         // events and will send the close event if activated.
          if (!this.terminal)
          {
             process.on('SIGINT', this.processInterruptCallback.bind(this));
@@ -377,7 +388,7 @@ class Watcher
          else
          {
             const rlConfig = !this.silent ?
-            { input: process.stdin, output: process.stdout, prompt: '[32mTJSDoc>[0m ' } : { input: process.stdin };
+             { input: process.stdin, output: process.stdout, prompt: '[32mTJSDoc>[0m ' } : { input: process.stdin };
 
             this.readline = readline.createInterface(rlConfig);
 
@@ -406,164 +417,36 @@ class Watcher
 
                const lineSplit = line.trim().split(' ');
 
-               switch (lineSplit[0])
+               try
                {
-                  case 'exit':
-                     setImmediate(() => this.readline.close());
-                     break;
+                  const command = this.commands[lineSplit[0]];
 
-                  case 'globs':
-                     if (config._sourceGlobs)
-                     {
-                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source globs: ${
-                         JSON.stringify(config._sourceGlobs)}[0m`);
-                     }
-
-                     if (config.test && config.test._sourceGlobs)
-                     {
-                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test globs: ${
-                         JSON.stringify(config.test._sourceGlobs)}[0m`);
-                     }
-
-                     showPrompt();
-                     break;
-
-                  case 'help':
-                     this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - options:[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  'exit', shutdown watcher[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  'globs', list globs being watched[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  'help', this listing of commands[0m`);
-                     this.eventbus.trigger('log:info:raw',
-                      `[32m  'pause [on/off]', pauses / unpauses watcher events & logging[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  'regen', regenerate all documentation[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  'silent [on/off]', turns on / off logging[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  'status', logs current optional status[0m`);
-                     this.eventbus.trigger('log:info:raw',
-                      `[32m  'verbose [on/off]', turns on / off verbose logging[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  'watching', the files being watched[0m`);
-
-                     showPrompt();
-                     break;
-
-                  case 'pause':
-                     if (typeof lineSplit[1] === 'string')
-                     {
-                        switch (lineSplit[1])
-                        {
-                           case 'off':
-                              this.paused = false;
-                              break;
-
-                           case 'on':
-                              this.paused = true;
-                              break;
-
-                           default:
-                              this.eventbus.trigger('log:info:raw',
-                               `[32mtjsdoc-plugin-watcher - pause command malformed; must be 'pause [on/off]'[0m`);
-                        }
-                     }
-                     else
-                     {
-                        this.eventbus.trigger('log:info:raw',
-                         `[32mtjsdoc-plugin-watcher - pause command malformed; must be 'pause [on/off]'[0m`);
-                     }
-
-                     showPrompt();
-                     break;
-
-                  case 'regen':
-                     setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }));
-                     break;
-
-                  case 'silent':
-                     if (typeof lineSplit[1] === 'string')
-                     {
-                        switch (lineSplit[1])
-                        {
-                           case 'off':
-                              this.silent = false;
-                              break;
-
-                           case 'on':
-                              this.silent = true;
-                              break;
-
-                           default:
-                              this.eventbus.trigger('log:info:raw',
-                               `[32mtjsdoc-plugin-watcher - silent command malformed; must be 'silent [on/off]'[0m`);
-                        }
-                     }
-                     else
-                     {
-                        this.eventbus.trigger('log:info:raw',
-                         `[32mtjsdoc-plugin-watcher - silent command malformed; must be 'pause [on/off]'[0m`);
-                     }
-
-                     showPrompt();
-                     break;
-
-                  case 'status':
-                     this.eventbus.trigger('log:info:raw', '[32mtjsdoc-plugin-watcher - status:[0m');
-                     this.eventbus.trigger('log:info:raw', `[32m  paused: ${this.paused}[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  silent: ${this.silent}[0m`);
-                     this.eventbus.trigger('log:info:raw', `[32m  verbose: ${this.verbose}[0m`);
-                     this.eventbus.trigger('log:info:raw', '');
-
-                     showPrompt();
-                     break;
-
-                  case 'verbose':
-                     if (typeof lineSplit[1] === 'string')
-                     {
-                        switch (lineSplit[1])
-                        {
-                           case 'off':
-                              this.verbose = false;
-                              break;
-
-                           case 'on':
-                              this.verbose = true;
-                              break;
-
-                           default:
-                              this.eventbus.trigger('log:info:raw',
-                               `[32mtjsdoc-plugin-watcher - verbose command malformed; must be 'verbose [on/off]'[0m`);
-                        }
-                     }
-                     else
-                     {
-                        this.eventbus.trigger('log:info:raw',
-                         `[32mtjsdoc-plugin-watcher - verbose command malformed; must be 'verbose [on/off]'[0m`);
-                     }
-
-                     showPrompt();
-                     break;
-
-                  case 'watching':
-                     if (this.sourceWatcher)
-                     {
-                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source files: ${
-                         JSON.stringify(this.sourceWatcher.getWatched())}[0m`);
-                     }
-
-                     if (this.testWatcher)
-                     {
-                        this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test files: ${
-                         JSON.stringify(this.testWatcher.getWatched())}[0m`);
-                     }
-                     showPrompt();
-                     break;
-
-                  default:
-                     this.eventbus.trigger('log:info:raw',
-                      `[32mtjsdoc-plugin-watcher - unknown command (type 'help' for instructions)[0m`);
-
-                  // eslint-disable-next-line no-fallthrough
-                  case '':
-                     showPrompt();
-                     break;
+                  // Handle command if it is defined and has an `exec` function.
+                  if (typeof command === 'object' && typeof command.exec === 'function')
+                  {
+                     command.config = config;
+                     command.showPrompt = showPrompt;
+                     command.exec(command, lineSplit, line);
+                     return;
+                  }
                }
+               catch (err)
+               {
+                  this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - ${err.message}[0m`);
+
+                  showPrompt();
+
+                  return;
+               }
+
+               // If the entered command is anything except empty (``) then post an unknown command message.
+               if (lineSplit[0] !== '')
+               {
+                  this.eventbus.trigger('log:info:raw',
+                   `[32mtjsdoc-plugin-watcher - unknown command (type 'help' for instructions)[0m`);
+               }
+
+               showPrompt();
             });
 
             const globData = {};
@@ -579,6 +462,230 @@ class Watcher
       {
          this.log('tjsdoc-plugin-watcher: no main source or tests to watch.');
       }
+   }
+
+   /**
+    * Adds a terminal command.
+    *
+    * @param {object}      command - The command to add
+    *
+    * @property {string}   command.name - The name of the command.
+    *
+    * @property {string}   command.description - The description of the command for help option.
+    *
+    * @property {function} command.exec - The description of the command for help option.
+    */
+   addCommand(command = {})
+   {
+      if (typeof command !== 'object') { throw new TypeError(`'command' is not an 'object'.`); }
+      if (typeof command.name !== 'string') { throw new TypeError(`'command.name' is not a 'string'.`); }
+      if (typeof command.description !== 'string') { throw new TypeError(`'command.description' is not a 'string'.`); }
+      if (typeof command.exec !== 'function') { throw new TypeError(`'command.exec' is not a 'function'.`); }
+
+      this.commands[command.name] = command;
+   }
+
+   /**
+    * Initializes all built-in terminal commands:
+    *
+    * `exit`      - Shutdown watcher and exit TJSDoc execution.
+    * `globs`     - List the source and test globs being watched.
+    * `help`      - Log a listing of commands.
+    * `pause`     - [on/off], turns on / off watcher events.
+    * `regen`     - Regenerates all documentation.
+    * `silent`    - [on/off], turns on / off logging.
+    * `status`    - Logs current optional status.
+    * `verbose`   - [on/off], turns on / off verbose logging.
+    * `watching`  - Logs the files being watched.
+    */
+   initializeCommands()
+   {
+      this.addCommand(
+      {
+         name: 'exit',
+         description: ', shutdown watcher',
+         exec: () => setImmediate(() => this.readline.close())
+      });
+
+      this.addCommand(
+      {
+         name: 'globs',
+         description: ', list globs being watched',
+         exec: (command) =>
+         {
+            const config = command.config;
+
+            if (config._sourceGlobs)
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source globs: ${
+                JSON.stringify(config._sourceGlobs)}[0m`);
+            }
+
+            if (config.test && config.test._sourceGlobs)
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test globs: ${
+                JSON.stringify(config.test._sourceGlobs)}[0m`);
+            }
+
+            command.showPrompt();
+         }
+      });
+
+      this.addCommand(
+      {
+         name: 'help',
+         description: ', this listing of commands',
+         exec: (command) =>
+         {
+            this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - options:[0m`);
+
+            Object.keys(this.commands).sort().forEach((key) =>
+            {
+               const next = this.commands[key];
+               this.eventbus.trigger('log:info:raw', `[32m  '${next.name}'${next.description}[0m`);
+            });
+
+            command.showPrompt();
+         }
+      });
+
+      this.addCommand(
+      {
+         name: 'pause',
+         description: ' [on/off], turns on / off watcher events',
+         exec: (command, lineSplit) =>
+         {
+            if (typeof lineSplit[1] === 'string')
+            {
+               switch (lineSplit[1])
+               {
+                  case 'off':
+                     this.paused = false;
+                     break;
+
+                  case 'on':
+                     this.paused = true;
+                     break;
+
+                  default:
+                     throw new Error(`pause command malformed; must be 'pause [on/off]'`);
+               }
+            }
+            else
+            {
+               throw new Error(`pause command malformed; must be 'pause [on/off]'`);
+            }
+
+            command.showPrompt();
+         }
+      });
+
+      this.addCommand(
+      {
+         name: 'regen',
+         description: ', regenerate all documentation',
+         exec: () => setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }))
+      });
+
+      this.addCommand(
+      {
+         name: 'silent',
+         description: ' [on/off], turns on / off logging',
+         exec: (command, lineSplit) =>
+         {
+            if (typeof lineSplit[1] === 'string')
+            {
+               switch (lineSplit[1])
+               {
+                  case 'off':
+                     this.silent = false;
+                     break;
+
+                  case 'on':
+                     this.silent = true;
+                     break;
+
+                  default:
+                     throw new Error(`silent command malformed; must be 'silent [on/off]`);
+               }
+            }
+            else
+            {
+               throw new Error(`silent command malformed; must be 'silent [on/off]`);
+            }
+
+            command.showPrompt();
+         }
+      });
+
+      this.addCommand(
+      {
+         name: 'status',
+         description: ', logs current optional status',
+         exec: (command) =>
+         {
+            this.eventbus.trigger('log:info:raw', '[32mtjsdoc-plugin-watcher - status:[0m');
+            this.eventbus.trigger('log:info:raw', `[32m  paused: ${this.paused}[0m`);
+            this.eventbus.trigger('log:info:raw', `[32m  silent: ${this.silent}[0m`);
+            this.eventbus.trigger('log:info:raw', `[32m  verbose: ${this.verbose}[0m`);
+            this.eventbus.trigger('log:info:raw', '');
+
+            command.showPrompt();
+         }
+      });
+
+      this.addCommand(
+      {
+         name: 'verbose',
+         description: ' [on/off], turns on / off verbose logging',
+         exec: (command, lineSplit) =>
+         {
+            if (typeof lineSplit[1] === 'string')
+            {
+               switch (lineSplit[1])
+               {
+                  case 'off':
+                     this.verbose = false;
+                     break;
+
+                  case 'on':
+                     this.verbose = true;
+                     break;
+
+                  default:
+                     throw new Error(`verbose command malformed; must be 'verbose [on/off]'`);
+               }
+            }
+            else
+            {
+               throw new Error(`verbose command malformed; must be 'verbose [on/off]'`);
+            }
+
+            command.showPrompt();
+         }
+      });
+
+      this.addCommand(
+      {
+         name: 'watching',
+         description: ', the files being watched',
+         exec: (command) =>
+         {
+            if (this.sourceWatcher)
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source files: ${
+                JSON.stringify(this.sourceWatcher.getWatched())}[0m`);
+            }
+
+            if (this.testWatcher)
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test files: ${
+                JSON.stringify(this.testWatcher.getWatched())}[0m`);
+            }
+
+            command.showPrompt();
+         }
+      });
    }
 
    /**
@@ -719,5 +826,15 @@ export function onComplete(ev)
 {
    ev.data.keepAlive = true;
 
-   new Watcher(ev);
+   watcher.initialize(ev.data.config);
+}
+
+/**
+ * Provides eventbus bindings for generating DocObject and AST data for in memory code and files for main and tests.
+ *
+ * @param {PluginEvent} ev - The plugin event.
+ */
+export function onPluginLoad(ev)
+{
+   watcher = new Watcher(ev);
 }
