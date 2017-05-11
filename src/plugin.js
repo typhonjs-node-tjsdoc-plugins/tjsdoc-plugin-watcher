@@ -48,28 +48,26 @@ class Watcher
       this.chokidarOptions = this.pluginOptions.chokidarOptions || {};
 
       /**
-       * While true no runtime watcher events are triggered or logging occurs; default: false
-       * @type {boolean}
+       * Stores any optional on / off actions which store a boolean for current state.
+       *
+       * paused: while true no runtime watcher events are triggered or logging occurs; default: false
+       * silent: if true then no output is logged; default: false.
+       * verbose: if true then additional verbose output is logged; default: false.
+       *
+       * @type {{paused: boolean, silent: boolean, verbose: boolean}}
        */
-      this.paused = typeof this.pluginOptions.paused === 'boolean' ? this.pluginOptions.paused : false;
-
-      /**
-       * If true then no output is logged; default: false.
-       * @type {boolean}
-       */
-      this.silent = typeof this.pluginOptions.silent === 'boolean' ? this.pluginOptions.silent : false;
+      this.options =
+      {
+         paused: typeof this.pluginOptions.paused === 'boolean' ? this.pluginOptions.paused : false,
+         silent: typeof this.pluginOptions.silent === 'boolean' ? this.pluginOptions.silent : false,
+         verbose: typeof this.pluginOptions.verbose === 'boolean' ? this.pluginOptions.verbose : false
+      };
 
       /**
        * If true then an interactive terminal is enabled; default: true.
        * @type {boolean}
        */
       this.terminal = typeof this.pluginOptions.terminal === 'boolean' ? this.pluginOptions.terminal : true;
-
-      /**
-       * If true then additional verbose output is logged; default: false.
-       * @type {boolean}
-       */
-      this.verbose = typeof this.pluginOptions.verbose === 'boolean' ? this.pluginOptions.verbose : false;
 
       /**
        * Tracks the terminal prompt when it is visible.
@@ -95,12 +93,84 @@ class Watcher
        */
       this.readline = void 0;
 
+      // Adds persistent event bindings.
       ev.eventbus.on('tjsdoc:system:watcher:command:add', this.addCommand, this);
       ev.eventbus.on('tjsdoc:system:watcher:globs:get', this.getGlobs, this);
       ev.eventbus.on('tjsdoc:system:watcher:options:get', this.getOptions, this);
       ev.eventbus.on('tjsdoc:system:watcher:options:set', this.setOptions, this);
 
       this.initializeCommands();
+   }
+
+   /**
+    * Adds a terminal command.
+    *
+    * There is a special `optional` command which provides default handling for `on/off` boolean states. No `exec`
+    * function needs to be applied as interested components should
+    *
+    * @param {object}      command - The command to add
+    *
+    * @property {string}   command.name - The name of the command.
+    *
+    * @property {string}   command.description - The description of the command for help option.
+    *
+    * @property {function} command.exec - The description of the command for help option.
+    */
+   addCommand(command = {})
+   {
+      if (typeof command !== 'object') { throw new TypeError(`'command' is not an 'object'.`); }
+      if (typeof command.name !== 'string') { throw new TypeError(`'command.name' is not a 'string'.`); }
+      if (typeof command.description !== 'string') { throw new TypeError(`'command.description' is not a 'string'.`); }
+
+      // Wrap optional commands with a function that will set the tracked option state locally.
+      // The original exec function is invoked with the current state.
+      if (typeof command.type === 'string' && command.type === 'optional')
+      {
+         const origExec = command.exec;
+
+         // If not already set and initial state is provided then set it otherwise 'false' is assigned.
+         if (typeof this.options[command.name] !== 'boolean')
+         {
+            this.options[command.name] = typeof command.state === 'boolean' ? command.state : false;
+         }
+
+         // Define the default optional execution function to parse `on/off` and set state accordingly.
+         command.exec = (command, lineSplit) =>
+         {
+            if (typeof lineSplit[1] === 'string')
+            {
+               switch (lineSplit[1])
+               {
+                  case 'off':
+                     this.options[command.name] = false;
+                     this.eventbus.trigger('tjsdoc:system:watcher:options:changed', this.getOptions());
+                     if (typeof origExec === 'function') { origExec(false); }
+                     break;
+
+                  case 'on':
+                     this.options[command.name] = true;
+                     this.eventbus.trigger('tjsdoc:system:watcher:options:changed', this.getOptions());
+                     if (typeof origExec === 'function') { origExec(true); }
+                     break;
+
+                  default:
+                     throw new Error(`${command.name} command malformed; must be '${command.name} [on/off]'`);
+               }
+            }
+            else
+            {
+               throw new Error(`${command.name} command malformed; must be '${command.name} [on/off]'`);
+            }
+
+            command.showPrompt();
+         };
+      }
+      else
+      {
+         if (typeof command.exec !== 'function') { throw new TypeError(`'command.exec' is not a 'function'.`); }
+      }
+
+      this.commands[command.name] = command;
    }
 
    /**
@@ -123,7 +193,7 @@ class Watcher
     */
    getOptions()
    {
-      return { paused: this.paused, silent: this.silent, verbose: this.verbose };
+      return JSON.parse(JSON.stringify(this.options));
    }
 
    /**
@@ -270,6 +340,8 @@ class Watcher
 
       this.eventProxy.on('tjsdoc:system:watcher:shutdown', this.shutdownCallback, this);
       this.eventProxy.on('tjsdoc:system:watcher:watching:get', this.getWatching, this);
+      this.eventProxy.on('tjsdoc:system:watcher:terminal:log', this.log, this);
+      this.eventProxy.on('tjsdoc:system:watcher:terminal:log:verbose', this.logVerbose, this);
 
       if (config._sourceGlobs)
       {
@@ -378,7 +450,7 @@ class Watcher
       if (config._sourceGlobs || (config.test && config.test._sourceGlobs))
       {
          // If there is no terminal enabled hook into process SIGINT event. Otherwise set terminal readline loop
-         // waiting for the user to type in the commands: `exit`, `globs`, `help`, `pause`, `regen`, `silent`,
+         // waiting for the user to type in the commands: `exit`, `globs`, `help`, `paused`, `regen`, `silent`,
          // `status`, `verbose`, `watching`. The readline terminal will hook into SIGINT (`Ctrl-C`) & SIGHUP (`Ctrl-D`)
          // events and will send the close event if activated.
          if (!this.terminal)
@@ -387,14 +459,14 @@ class Watcher
          }
          else
          {
-            const rlConfig = !this.silent ?
+            const rlConfig = !this.options.silent ?
              { input: process.stdin, output: process.stdout, prompt: '[32mTJSDoc>[0m ' } : { input: process.stdin };
 
             this.readline = readline.createInterface(rlConfig);
 
             const showPrompt = () =>
             {
-               if (!this.silent)
+               if (!this.options.silent)
                {
                   this.promptVisible = true;
                   this.readline.prompt();
@@ -465,33 +537,12 @@ class Watcher
    }
 
    /**
-    * Adds a terminal command.
-    *
-    * @param {object}      command - The command to add
-    *
-    * @property {string}   command.name - The name of the command.
-    *
-    * @property {string}   command.description - The description of the command for help option.
-    *
-    * @property {function} command.exec - The description of the command for help option.
-    */
-   addCommand(command = {})
-   {
-      if (typeof command !== 'object') { throw new TypeError(`'command' is not an 'object'.`); }
-      if (typeof command.name !== 'string') { throw new TypeError(`'command.name' is not a 'string'.`); }
-      if (typeof command.description !== 'string') { throw new TypeError(`'command.description' is not a 'string'.`); }
-      if (typeof command.exec !== 'function') { throw new TypeError(`'command.exec' is not a 'function'.`); }
-
-      this.commands[command.name] = command;
-   }
-
-   /**
     * Initializes all built-in terminal commands:
     *
     * `exit`      - Shutdown watcher and exit TJSDoc execution.
     * `globs`     - List the source and test globs being watched.
     * `help`      - Log a listing of commands.
-    * `pause`     - [on/off], turns on / off watcher events.
+    * `paused`     - [on/off], turns on / off watcher events.
     * `regen`     - Regenerates all documentation.
     * `silent`    - [on/off], turns on / off logging.
     * `status`    - Logs current optional status.
@@ -503,14 +554,14 @@ class Watcher
       this.addCommand(
       {
          name: 'exit',
-         description: ', shutdown watcher',
+         description: 'shutdown watcher',
          exec: () => setImmediate(() => this.readline.close())
       });
 
       this.addCommand(
       {
          name: 'globs',
-         description: ', list globs being watched',
+         description: 'list globs being watched',
          exec: (command) =>
          {
             const config = command.config;
@@ -534,7 +585,7 @@ class Watcher
       this.addCommand(
       {
          name: 'help',
-         description: ', this listing of commands',
+         description: 'this listing of commands',
          exec: (command) =>
          {
             this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - options:[0m`);
@@ -542,7 +593,8 @@ class Watcher
             Object.keys(this.commands).sort().forEach((key) =>
             {
                const next = this.commands[key];
-               this.eventbus.trigger('log:info:raw', `[32m  '${next.name}'${next.description}[0m`);
+               this.eventbus.trigger('log:info:raw',
+                `[32m  '${next.name}'${next.type === 'optional' ? ' [on/off], ' : ', '}${next.description}[0m`);
             });
 
             command.showPrompt();
@@ -551,83 +603,42 @@ class Watcher
 
       this.addCommand(
       {
-         name: 'pause',
-         description: ' [on/off], turns on / off watcher events',
-         exec: (command, lineSplit) =>
-         {
-            if (typeof lineSplit[1] === 'string')
-            {
-               switch (lineSplit[1])
-               {
-                  case 'off':
-                     this.paused = false;
-                     break;
-
-                  case 'on':
-                     this.paused = true;
-                     break;
-
-                  default:
-                     throw new Error(`pause command malformed; must be 'pause [on/off]'`);
-               }
-            }
-            else
-            {
-               throw new Error(`pause command malformed; must be 'pause [on/off]'`);
-            }
-
-            command.showPrompt();
-         }
+         name: 'paused',
+         description: 'turns on / off watcher events',
+         type: 'optional'
       });
 
       this.addCommand(
       {
          name: 'regen',
-         description: ', regenerate all documentation',
+         description: 'regenerate all documentation',
          exec: () => setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }))
       });
 
       this.addCommand(
       {
          name: 'silent',
-         description: ' [on/off], turns on / off logging',
-         exec: (command, lineSplit) =>
-         {
-            if (typeof lineSplit[1] === 'string')
-            {
-               switch (lineSplit[1])
-               {
-                  case 'off':
-                     this.silent = false;
-                     break;
-
-                  case 'on':
-                     this.silent = true;
-                     break;
-
-                  default:
-                     throw new Error(`silent command malformed; must be 'silent [on/off]`);
-               }
-            }
-            else
-            {
-               throw new Error(`silent command malformed; must be 'silent [on/off]`);
-            }
-
-            command.showPrompt();
-         }
+         description: 'turns on / off logging',
+         type: 'optional'
       });
 
       this.addCommand(
       {
          name: 'status',
-         description: ', logs current optional status',
+         description: 'logs current optional status',
          exec: (command) =>
          {
             this.eventbus.trigger('log:info:raw', '[32mtjsdoc-plugin-watcher - status:[0m');
-            this.eventbus.trigger('log:info:raw', `[32m  paused: ${this.paused}[0m`);
-            this.eventbus.trigger('log:info:raw', `[32m  silent: ${this.silent}[0m`);
-            this.eventbus.trigger('log:info:raw', `[32m  verbose: ${this.verbose}[0m`);
+
+            const keys = Object.keys(this.options);
+            keys.sort();
+
+            // Log current optional state.
+            for (const key of keys)
+            {
+               this.eventbus.trigger('log:info:raw', `[32m  ${key}: ${this.options[key]}[0m`);
+            }
+
             this.eventbus.trigger('log:info:raw', '');
 
             command.showPrompt();
@@ -637,38 +648,14 @@ class Watcher
       this.addCommand(
       {
          name: 'verbose',
-         description: ' [on/off], turns on / off verbose logging',
-         exec: (command, lineSplit) =>
-         {
-            if (typeof lineSplit[1] === 'string')
-            {
-               switch (lineSplit[1])
-               {
-                  case 'off':
-                     this.verbose = false;
-                     break;
-
-                  case 'on':
-                     this.verbose = true;
-                     break;
-
-                  default:
-                     throw new Error(`verbose command malformed; must be 'verbose [on/off]'`);
-               }
-            }
-            else
-            {
-               throw new Error(`verbose command malformed; must be 'verbose [on/off]'`);
-            }
-
-            command.showPrompt();
-         }
+         description: 'turns on / off verbose logging',
+         type: 'optional'
       });
 
       this.addCommand(
       {
          name: 'watching',
-         description: ', the files being watched',
+         description: 'the files being watched',
          exec: (command) =>
          {
             if (this.sourceWatcher)
@@ -695,7 +682,7 @@ class Watcher
     */
    log(message)
    {
-      if (!this.silent && !this.paused)
+      if (!this.options.silent && !this.options.paused)
       {
          if (this.promptVisible)
          {
@@ -715,7 +702,7 @@ class Watcher
     */
    logVerbose(message)
    {
-      if (this.verbose && !this.silent && !this.paused)
+      if (this.options.verbose && !this.options.silent && !this.options.paused)
       {
          if (this.promptVisible)
          {
@@ -740,7 +727,8 @@ class Watcher
    }
 
    /**
-    * Set optional parameters. All parameters are off by default.
+    * Set optional parameters. If a change occurs the 'tjsdoc:system:watcher:options:changed' event binding is
+    * triggered with the current options state.
     *
     * @param {object} options - Defines optional parameters to set.
     */
@@ -748,9 +736,21 @@ class Watcher
    {
       if (typeof options !== 'object') { throw new TypeError(`'options' is not an object.`); }
 
-      if (typeof options.paused === 'boolean') { this.paused = options.paused; }
-      if (typeof options.silent === 'boolean') { this.silent = options.silent; }
-      if (typeof options.verbose === 'boolean') { this.verbose = options.verbose; }
+      let optionsChanged = false;
+
+      for (const key in options)
+      {
+         if (typeof this.options[key] === 'boolean' && typeof options[key] === 'boolean')
+         {
+            this.options[key] = options[key];
+            optionsChanged = true;
+         }
+      }
+
+      if (optionsChanged)
+      {
+         this.eventbus.trigger('tjsdoc:system:watcher:options:changed', this.getOptions());
+      }
    }
 
    /**
@@ -811,7 +811,7 @@ class Watcher
     */
    triggerEvent(...args)
    {
-      if (!this.paused) { this.eventbus.trigger(...args); }
+      if (!this.options.paused) { this.eventbus.trigger(...args); }
    }
 }
 
