@@ -362,7 +362,8 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - source addition: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:add', type: 'source', path });
+               this.triggerEvent('tjsdoc:system:watcher:update',
+                { action: 'file:add', type: 'source', path, options: this.getOptions() });
             });
 
             // On source file changed.
@@ -370,7 +371,8 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - source changed: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:change', type: 'source', path });
+               this.triggerEvent('tjsdoc:system:watcher:update',
+                { action: 'file:change', type: 'source', path, options: this.getOptions() });
             });
 
             // On source file deleted.
@@ -378,7 +380,8 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - source unlinked: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:unlink', type: 'source', path });
+               this.triggerEvent('tjsdoc:system:watcher:update',
+                { action: 'file:unlink', type: 'source', path, options: this.getOptions() });
             });
 
             // Set watcher start data (globs / files).
@@ -414,7 +417,8 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - test addition: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:add', type: 'test', path });
+               this.triggerEvent('tjsdoc:system:watcher:update',
+                { action: 'file:add', type: 'test', path, options: this.getOptions() });
             });
 
             // On test file changed.
@@ -422,7 +426,8 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - test changed: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:change', type: 'test', path });
+               this.triggerEvent('tjsdoc:system:watcher:update',
+                { action: 'file:change', type: 'test', path, options: this.getOptions() });
             });
 
             // On test file deleted.
@@ -430,7 +435,8 @@ class Watcher
             {
                this.logVerbose(`tjsdoc-plugin-watcher - test unlinked: ${path}`);
 
-               this.triggerEvent('tjsdoc:system:watcher:update', { action: 'file:unlink', type: 'test', path });
+               this.triggerEvent('tjsdoc:system:watcher:update',
+                { action: 'file:unlink', type: 'test', path, options: this.getOptions() });
             });
 
             // Set watcher start data (globs / files).
