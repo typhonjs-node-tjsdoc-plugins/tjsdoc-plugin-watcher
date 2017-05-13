@@ -29,8 +29,8 @@ const log = (message) =>
 const s_VERIFY_INIT_SOURCE = '["src/**/*","test/dest/main/**/*"]';
 const s_VERIFY_INIT_TEST = '["test/src/**/*","test/dest/test/**/*"]';
 
-const s_VERIFY_START_SOURCE = '{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["plugin.js"]}}';
-const s_VERIFY_START_TEST = '{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["plugin.js"]}}';
+const s_VERIFY_START_SOURCE = '{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["WatchGroup.js","Watcher.js"]}}';
+const s_VERIFY_START_TEST = '{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["Watcher.js"]}}';
 
 /**
  * @test {Watcher}
@@ -103,7 +103,7 @@ describe('tjsdoc-plugin-watcher', () =>
    {
       const config = JSON.parse(fs.readFileSync('./.tjsdocrc').toString());
 
-      config.plugins = [{ name: './src/plugin.js', options: { paused: true } }];
+      config.plugins = [{ name: './src/Watcher.js', options: { paused: true } }];
 
       s_PERFORM_INIT_TEST(eventProxy, true, () =>
       {
@@ -145,7 +145,7 @@ describe('tjsdoc-plugin-watcher', () =>
 
       eventProxy.on('log:info:time', () => { throw new Error(`Received 'log:info:time: event in 'silent' mode.`); });
 
-      config.plugins = [{ name: './src/plugin.js', options: { silent: true } }];
+      config.plugins = [{ name: './src/Watcher.js', options: { silent: true } }];
 
       s_PERFORM_INIT_TEST(eventProxy, true,
        () => s_PERFORM_CHANGES(eventProxy, () => { eventProxy.trigger('tjsdoc:system:watcher:shutdown'); }));
@@ -184,7 +184,7 @@ describe('tjsdoc-plugin-watcher', () =>
          if (message.startsWith('tjsdoc-plugin-watcher - watching stopped')) { verifyInfo.watchersStopped = true; }
       });
 
-      config.plugins = [{ name: './src/plugin.js', options: { verbose: true } }];
+      config.plugins = [{ name: './src/Watcher.js', options: { verbose: true } }];
 
       s_PERFORM_INIT_TEST(eventProxy, true,
        () => s_PERFORM_CHANGES(eventProxy, () => { eventProxy.trigger('tjsdoc:system:watcher:shutdown'); }));
@@ -219,7 +219,7 @@ describe('tjsdoc-plugin-watcher', () =>
 
          Util.assert.strictEqual(JSON.stringify(globs), '{"source":["src/**/*","test/dest/main/**/*"],"test":["test/src/**/*","test/dest/test/**/*"]}');
          Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":false}');
-         Util.assert.strictEqual(JSON.stringify(watching), '{"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["plugin.js"]}},"test":{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["plugin.js"]}}}');
+         Util.assert.strictEqual(JSON.stringify(watching), '{"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["WatchGroup.js","Watcher.js"]}},"test":{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["Watcher.js"]}}}');
 
          eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: true });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
@@ -329,6 +329,9 @@ const s_PERFORM_CHANGES = (eventProxy, shutdownCallback) =>
 
    eventProxy.on('tjsdoc:system:watcher:update', (data) =>
    {
+      // Remove current optional status from data event.
+      delete data.options;
+
       const dataString = JSON.stringify(data);
 
       log(`s_PERFORM_CHANGES - update - data: ${dataString}`);
@@ -343,7 +346,10 @@ const s_PERFORM_CHANGES = (eventProxy, shutdownCallback) =>
          {
             for (const key in verifyInfo)
             {
-               if (!verifyInfo[key]) { throw new Error('s_PERFORM_CHANGES did not complete all operations'); }
+               if (!verifyInfo[key])
+               {
+                  throw new Error(`s_PERFORM_CHANGES did not complete all operations: ${JSON.stringify(verifyInfo)}`);
+               }
             }
 
             if (shutdownCallback) { shutdownCallback(); }

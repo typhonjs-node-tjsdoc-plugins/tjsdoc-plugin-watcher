@@ -40,7 +40,7 @@
     ".tjsdocrc",
     "AUTHORS.md"
   ],
-  "main": "dist/plugin.js",
+  "main": "dist/Watcher.js",
   "bugs": {
     "url": "https://github.com/typhonjs-node-tjsdoc/tjsdoc/issues"
   }

@@ -10,5 +10,5 @@
     "source": ["test/src", "test/dest/test"]
   },
 
-  "plugins": [ { "name": "./src/plugin.js" } ]
+  "plugins": [ { "name": "./src/Watcher.js" } ]
 }
