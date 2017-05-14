@@ -1,7 +1,8 @@
-import chokidar   from 'chokidar';
 import fs         from 'fs';
 import path       from 'path';
 import readline   from 'readline';
+
+import WatchGroup from './WatchGroup.js';
 
 let watcher;
 
@@ -329,131 +330,47 @@ class Watcher
        */
       this.config = config;
 
-      /**
-       * Tracks the watcher count and when a watcher is started the count is reduced and when `0` is reached then
-       * the `tjsdoc:system:watcher:started` event is triggered.
-       * @type {number}
-       */
-      let watcherStartCount = 0;
-
-      const watcherStartData = { source: { globs: [], files: {} }, test: { globs: [], files: {} } };
-
       this.eventProxy.on('tjsdoc:system:watcher:shutdown', this.shutdownCallback, this);
       this.eventProxy.on('tjsdoc:system:watcher:watching:get', this.getWatching, this);
       this.eventProxy.on('tjsdoc:system:watcher:terminal:log', this.log, this);
       this.eventProxy.on('tjsdoc:system:watcher:terminal:log:verbose', this.logVerbose, this);
 
+      const watcherPromises = [];
+
       if (config._sourceGlobs)
       {
          this.log(`tjsdoc-plugin-watcher - watching source globs: ${JSON.stringify(config._sourceGlobs)}`);
 
-         watcherStartCount++;
+         this.sourceWatcher = new WatchGroup(this, config._sourceGlobs, 'source');
 
-         // Create source watcher providing a custom ignored function which uses config._includes and config._excludes
-         // for filtering files.
-         this.sourceWatcher = chokidar.watch(config._sourceGlobs,
-          Object.assign({ ignored: this.ignoredSource.bind(this) }, this.chokidarOptions));
-
-         // On source watcher ready.
-         this.sourceWatcher.on('ready', () =>
-         {
-            // On source file added.
-            this.sourceWatcher.on('add', (path) =>
-            {
-               this.logVerbose(`tjsdoc-plugin-watcher - source addition: ${path}`);
-
-               this.triggerEvent('tjsdoc:system:watcher:update',
-                { action: 'file:add', type: 'source', path, options: this.getOptions() });
-            });
-
-            // On source file changed.
-            this.sourceWatcher.on('change', (path) =>
-            {
-               this.logVerbose(`tjsdoc-plugin-watcher - source changed: ${path}`);
-
-               this.triggerEvent('tjsdoc:system:watcher:update',
-                { action: 'file:change', type: 'source', path, options: this.getOptions() });
-            });
-
-            // On source file deleted.
-            this.sourceWatcher.on('unlink', (path) =>
-            {
-               this.logVerbose(`tjsdoc-plugin-watcher - source unlinked: ${path}`);
-
-               this.triggerEvent('tjsdoc:system:watcher:update',
-                { action: 'file:unlink', type: 'source', path, options: this.getOptions() });
-            });
-
-            // Set watcher start data (globs / files).
-            watcherStartData.source = { globs: config._sourceGlobs, files: this.sourceWatcher.getWatched() };
-
-            watcherStartCount--;
-
-            if (watcherStartCount === 0)
-            {
-               this.log(`tjsdoc-plugin-watcher - type 'help' for options.`);
-
-               this.eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData);
-            }
-         });
+         watcherPromises.push(this.sourceWatcher.initialize(this.chokidarOptions, this.ignoredSource.bind(this)));
       }
 
       if (config.test && config.test._sourceGlobs)
       {
          this.log(`tjsdoc-plugin-watcher - watching test globs: ${JSON.stringify(config.test._sourceGlobs)}`);
 
-         watcherStartCount++;
+         this.testWatcher = new WatchGroup(this, config.test._sourceGlobs, 'test');
 
-         // Create test watcher providing a custom ignored function which uses config.test._includes and
-         // config.test._excludes for filtering files.
-         this.testWatcher = chokidar.watch(config.test._sourceGlobs,
-          Object.assign({ ignored: this.ignoredTest.bind(this) }, this.chokidarOptions));
-
-         // On test watcher ready.
-         this.testWatcher.on('ready', () =>
-         {
-            // On test file added.
-            this.testWatcher.on('add', (path) =>
-            {
-               this.logVerbose(`tjsdoc-plugin-watcher - test addition: ${path}`);
-
-               this.triggerEvent('tjsdoc:system:watcher:update',
-                { action: 'file:add', type: 'test', path, options: this.getOptions() });
-            });
-
-            // On test file changed.
-            this.testWatcher.on('change', (path) =>
-            {
-               this.logVerbose(`tjsdoc-plugin-watcher - test changed: ${path}`);
-
-               this.triggerEvent('tjsdoc:system:watcher:update',
-                { action: 'file:change', type: 'test', path, options: this.getOptions() });
-            });
-
-            // On test file deleted.
-            this.testWatcher.on('unlink', (path) =>
-            {
-               this.logVerbose(`tjsdoc-plugin-watcher - test unlinked: ${path}`);
-
-               this.triggerEvent('tjsdoc:system:watcher:update',
-                { action: 'file:unlink', type: 'test', path, options: this.getOptions() });
-            });
-
-            // Set watcher start data (globs / files).
-            watcherStartData.test = { globs: config.test._sourceGlobs, files: this.testWatcher.getWatched() };
-
-            watcherStartCount--;
-
-            if (watcherStartCount === 0)
-            {
-               this.log(`tjsdoc-plugin-watcher - type 'help' for options.`);
-
-               this.eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData);
-            }
-         });
+         watcherPromises.push(this.testWatcher.initialize(this.chokidarOptions, this.ignoredTest.bind(this)));
       }
 
-      if (config._sourceGlobs || (config.test && config.test._sourceGlobs))
+      Promise.all(watcherPromises).then((results) =>
+      {
+         const watcherStartData = Object.assign(
+         {
+            source: { globs: [], files: {} },
+            test: { globs: [], files: {} },
+            index: { globs: [], files: {} },
+            manual: { globs: [], files: {} }
+         }, ...results);
+
+         this.log(`tjsdoc-plugin-watcher - type 'help' for options.`);
+
+         this.eventbus.trigger('tjsdoc:system:watcher:started', watcherStartData);
+      });
+
+      if (watcherPromises.length > 0)
       {
          // If there is no terminal enabled hook into process SIGINT event. Otherwise set terminal readline loop
          // waiting for the user to type in the commands: `exit`, `globs`, `help`, `paused`, `regen`, `silent`,
