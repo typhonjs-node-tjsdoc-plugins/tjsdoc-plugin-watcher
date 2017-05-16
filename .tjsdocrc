@@ -10,5 +10,11 @@
     "source": ["test/src", "test/dest/test"]
   },
 
-  "plugins": [ { "name": "./src/Watcher.js" } ]
+  "plugins": [ { "name": "./src/Watcher.js" } ],
+
+  "publisherOptions": {
+    "manual": {
+      "overview": ["./test/fixture/ManualTest.md"]
+    }
+  }
 }

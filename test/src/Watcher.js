@@ -26,10 +26,14 @@ const log = (message) =>
    if (s_DEBUG_LOG) { console.log(message); }
 };
 
+const s_VERIFY_INIT_INDEX = '["./README.md"]';
+const s_VERIFY_INIT_MANUAL = '["./test/fixture/ManualTest.md"]';
 const s_VERIFY_INIT_SOURCE = '["src/**/*","test/dest/main/**/*"]';
 const s_VERIFY_INIT_TEST = '["test/src/**/*","test/dest/test/**/*"]';
 
-const s_VERIFY_START_SOURCE = '{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["WatchGroup.js","Watcher.js"]}}';
+const s_VERIFY_START_INDEX = '{"globs":"./README.md","files":{"":["README.md"]}}';
+const s_VERIFY_START_MANUAL = '{"globs":["./test/fixture/ManualTest.md"],"files":{"test/fixture":["ManualTest.md"]}}';
+const s_VERIFY_START_SOURCE = '{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["ManualWatchGroup.js","WatchGroup.js","Watcher.js"]}}';
 const s_VERIFY_START_TEST = '{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["Watcher.js"]}}';
 
 /**
@@ -161,6 +165,11 @@ describe('tjsdoc-plugin-watcher', () =>
 
       const verifyInfo =
       {
+         watchingIndex: false,
+         watchingManual: false,
+         watchingSource: false,
+         watchingTest: false,
+         helpMessage: false,
          sourceAdded: false,
          testAdded: false,
          sourceChanged: false,
@@ -174,6 +183,11 @@ describe('tjsdoc-plugin-watcher', () =>
       // Verifies that all verbose logging messages are received.
       eventProxy.on('log:info:time', (message) =>
       {
+         if (message.startsWith('tjsdoc-plugin-watcher - watching index: ./README.md')) { verifyInfo.watchingIndex = true; }
+         if (message.startsWith('tjsdoc-plugin-watcher - watching manual globs: ["./test/fixture/ManualTest.md"]')) { verifyInfo.watchingManual = true; }
+         if (message.startsWith('tjsdoc-plugin-watcher - watching source globs: ["src/**/*","test/dest/main/**/*"]')) { verifyInfo.watchingSource = true; }
+         if (message.startsWith('tjsdoc-plugin-watcher - watching test globs: ["test/src/**/*","test/dest/test/**/*"]')) { verifyInfo.watchingTest = true; }
+         if (message.startsWith(`tjsdoc-plugin-watcher - type 'help' for options.`)) { verifyInfo.helpMessage = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - source addition')) { verifyInfo.sourceAdded = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - test addition')) { verifyInfo.testAdded = true; }
          if (message.startsWith('tjsdoc-plugin-watcher - source changed')) { verifyInfo.sourceChanged = true; }
@@ -195,6 +209,7 @@ describe('tjsdoc-plugin-watcher', () =>
          {
             if (!verifyInfo[key])
             {
+console.log('!!!!! verifyInfo: ' + JSON.stringify(verifyInfo));
                throw new Error(`Did not receive all verbose log messages, verifyInfo: ${JSON.stringify(verifyInfo)}`);
             }
          }
@@ -217,9 +232,9 @@ describe('tjsdoc-plugin-watcher', () =>
 
          eventProxy.on('tjsdoc:system:watcher:options:changed', (newOptions) => { currentOptions = newOptions; });
 
-         Util.assert.strictEqual(JSON.stringify(globs), '{"source":["src/**/*","test/dest/main/**/*"],"test":["test/src/**/*","test/dest/test/**/*"]}');
+         Util.assert.strictEqual(JSON.stringify(globs), '{"index":["./README.md"],"manual":["./test/fixture/ManualTest.md"],"source":["src/**/*","test/dest/main/**/*"],"test":["test/src/**/*","test/dest/test/**/*"]}');
          Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":false}');
-         Util.assert.strictEqual(JSON.stringify(watching), '{"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["WatchGroup.js","Watcher.js"]}},"test":{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["Watcher.js"]}}}');
+         Util.assert.strictEqual(JSON.stringify(watching), '{"index":{"globs":["./README.md"],"files":{"":["README.md"]}},"manual":{"globs":["./test/fixture/ManualTest.md"],"files":{"test/fixture":["ManualTest.md"]}},"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["ManualWatchGroup.js","WatchGroup.js","Watcher.js"]}},"test":{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["Watcher.js"]}}}');
 
          eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: true });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
@@ -274,6 +289,8 @@ const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
       Util.assert.isArray(data.test);
 
       // Test separately as order of addition may be swapped.
+      Util.assert.strictEqual(JSON.stringify(data.index), s_VERIFY_INIT_INDEX);
+      Util.assert.strictEqual(JSON.stringify(data.manual), s_VERIFY_INIT_MANUAL);
       Util.assert.strictEqual(JSON.stringify(data.source), s_VERIFY_INIT_SOURCE);
       Util.assert.strictEqual(JSON.stringify(data.test), s_VERIFY_INIT_TEST);
    });
@@ -283,12 +300,30 @@ const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
       if (testInit) { Util.assert.isTrue(initialized); }
 
       Util.assert.isObject(data);
+      Util.assert.isObject(data.index);
+      Util.assert.isObject(data.index.files);
+      Util.assert.isObject(data.manual);
+      Util.assert.isObject(data.manual.files);
       Util.assert.isObject(data.source);
       Util.assert.isObject(data.source.files);
       Util.assert.isObject(data.test);
       Util.assert.isObject(data.test.files);
 
       // Filter absolute paths converting them to relative.
+      for (const key in data.index.files)
+      {
+         const relKey = path.relative('.', key);
+         data.index.files[relKey] = data.index.files[key];
+         delete data.index.files[key];
+      }
+
+      for (const key in data.manual.files)
+      {
+         const relKey = path.relative('.', key);
+         data.manual.files[relKey] = data.manual.files[key];
+         delete data.manual.files[key];
+      }
+
       for (const key in data.source.files)
       {
          const relKey = path.relative('.', key);
@@ -304,6 +339,8 @@ const s_PERFORM_INIT_TEST = (eventProxy, testInit, doneCallback) =>
       }
 
       // Test separately as order of addition may be swapped.
+      Util.assert.strictEqual(JSON.stringify(data.index), s_VERIFY_START_INDEX);
+      Util.assert.strictEqual(JSON.stringify(data.manual), s_VERIFY_START_MANUAL);
       Util.assert.strictEqual(JSON.stringify(data.source), s_VERIFY_START_SOURCE);
       Util.assert.strictEqual(JSON.stringify(data.test), s_VERIFY_START_TEST);
 

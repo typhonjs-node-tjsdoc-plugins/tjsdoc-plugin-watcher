@@ -1,13 +1,29 @@
-import fs         from 'fs';
-import path       from 'path';
-import readline   from 'readline';
+import fs               from 'fs';
+import path             from 'path';
+import readline         from 'readline';
 
-import WatchGroup from './WatchGroup.js';
+import ManualWatchGroup from './ManualWatchGroup.js';
+import WatchGroup       from './WatchGroup.js';
 
 let watcher;
 
 /**
- * Provides file watching control flow for TJSDoc during the `onComplete` callback.
+ * Provides file watching control flow for TJSDoc during the `onComplete` callback. There are several watch groups setup
+ * for various files used to produce documentation:
+ *
+ * - index - The index.html markdown file; default: ./README.md
+ * - manual - Any user specified manual pages from the target project config -> `publisherOptions.manual`.
+ * - source - The source globs from the target project config.
+ * - test - The test source globs from the target project config.
+ *
+ * Events are fired when files are added, changed, unlinked for any matched globs triggering an event on the plugin
+ * eventbus under `tjsdoc:system:watcher:update` with the following object hash:
+ *
+ * - action: 'file:<add|change|unlink>'
+ * - type: '<index|manual|source|test>',
+ * - path: the file path
+ * - [section]: for manual files the manual section is added if a reverse match is found against the file path.
+ * - options: the current optional parameter state.
  */
 class Watcher
 {
@@ -75,6 +91,18 @@ class Watcher
        * @type {boolean}
        */
       this.promptVisible = false;
+
+      /**
+       * The chokidar watcher instance for the index / README file.
+       * @type {Object}
+       */
+      this.indexWatcher = void 0;
+
+      /**
+       * The chokidar watcher instance for the manual globs.
+       * @type {Object}
+       */
+      this.manualWatcher = void 0;
 
       /**
        * The chokidar watcher instance for source globs.
@@ -182,6 +210,8 @@ class Watcher
    getGlobs()
    {
       return {
+         index: this.config.index ? [this.config.index] : [],
+         manual: this.manualGlobs ? this.manualGlobs.all : [],
          source: this.config._sourceGlobs ? this.config._sourceGlobs : [],
          test: this.config.test && this.config.test._sourceGlobs ? this.config.test._sourceGlobs : []
       };
@@ -203,10 +233,14 @@ class Watcher
     * @param {object}      [options] - Optional parameters.
     * @property {boolean}  [options.relative] - If true then all directory paths in `files` is made relative to CWD.
     *
-    * @returns {{source: {globs: Array, files: {}}, test: {globs: Array, files: {}}}}
+    * @returns {{index: {globs: Array, files: {}}, manual: {globs: Array, files: {}}, source: {globs: Array, files: {}}, test: {globs: Array, files: {}}}}
     */
    getWatching(options)
    {
+      const indexGlobs = this.config.index ? [this.config.index] : [];
+      const indexFiles = this.indexWatcher ? this.indexWatcher.getWatched() : {};
+      const manualGlobs = this.manualGlobs.all ? this.manualGlobs.all : [];
+      const manualFiles = this.manualWatcher ? this.manualWatcher.getWatched() : {};
       const sourceGlobs = this.config._sourceGlobs ? this.config._sourceGlobs : [];
       const sourceFiles = this.sourceWatcher ? this.sourceWatcher.getWatched() : {};
       const testGlobs = this.config.test && this.config.test._sourceGlobs ? this.config.test._sourceGlobs : [];
@@ -215,6 +249,20 @@ class Watcher
       // Filter absolute paths converting them to relative.
       if (typeof options === 'object' && typeof options.relative === 'boolean' && options.relative)
       {
+         for (const key in indexFiles)
+         {
+            const relKey = path.relative('.', key);
+            indexFiles[relKey] = indexFiles[key];
+            delete indexFiles[key];
+         }
+
+         for (const key in manualFiles)
+         {
+            const relKey = path.relative('.', key);
+            manualFiles[relKey] = manualFiles[key];
+            delete manualFiles[key];
+         }
+
          for (const key in sourceFiles)
          {
             const relKey = path.relative('.', key);
@@ -231,6 +279,8 @@ class Watcher
       }
 
       return {
+         index: { globs: indexGlobs, files: indexFiles },
+         manual: { globs: manualGlobs, files: manualFiles },
          source: { globs: sourceGlobs, files: sourceFiles },
          test: { globs: testGlobs, files: testFiles }
       };
@@ -330,12 +380,39 @@ class Watcher
        */
       this.config = config;
 
+      // Potentially obtain manual glob object hash from publisher module which lists manual files to watch under the
+      // entry 'all' and by section under `sections`.
+      {
+         const globs = this.eventProxy.triggerSync('tjsdoc:data:publisher:config:manual:globs:get');
+
+         // Set only if it is an object and has `all` and `sections` entries.
+         if (typeof globs === 'object' && globs.all && globs.sections) { this.manualGlobs = globs; }
+      }
+
       this.eventProxy.on('tjsdoc:system:watcher:shutdown', this.shutdownCallback, this);
       this.eventProxy.on('tjsdoc:system:watcher:watching:get', this.getWatching, this);
       this.eventProxy.on('tjsdoc:system:watcher:terminal:log', this.log, this);
       this.eventProxy.on('tjsdoc:system:watcher:terminal:log:verbose', this.logVerbose, this);
 
       const watcherPromises = [];
+
+      if (fs.existsSync(config.index))
+      {
+         this.log(`tjsdoc-plugin-watcher - watching index: ${config.index}`);
+
+         this.indexWatcher = new WatchGroup(this, config.index, 'index');
+
+         watcherPromises.push(this.indexWatcher.initialize(this.chokidarOptions));
+      }
+
+      if (this.manualGlobs && this.manualGlobs.all.length > 0)
+      {
+         this.log(`tjsdoc-plugin-watcher - watching manual globs: ${JSON.stringify(this.manualGlobs.all)}`);
+
+         this.manualWatcher = new ManualWatchGroup(this, this.manualGlobs, 'manual');
+
+         watcherPromises.push(this.manualWatcher.initialize(this.chokidarOptions));
+      }
 
       if (config._sourceGlobs)
       {
@@ -444,13 +521,14 @@ class Watcher
                showPrompt();
             });
 
-            const globData = {};
+//TODO REMOVE!!!!!!!!!!!!!!!!!
+            // const globData = {};
 
-            if (config._sourceGlobs) { globData.source = config._sourceGlobs; }
+            // if (config._sourceGlobs) { globData.source = config._sourceGlobs; }
+            //
+            // if (config.test && config.test._sourceGlobs) { globData.test = config.test._sourceGlobs; }
 
-            if (config.test && config.test._sourceGlobs) { globData.test = config.test._sourceGlobs; }
-
-            this.eventbus.trigger('tjsdoc:system:watcher:initialized', globData);
+            this.eventbus.trigger('tjsdoc:system:watcher:initialized', this.getGlobs());
          }
       }
       else
@@ -581,6 +659,18 @@ class Watcher
          description: 'the files being watched',
          exec: (command) =>
          {
+            if (this.indexWatcher)
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching index files: ${
+                JSON.stringify(this.indexWatcher.getWatched())}[0m`);
+            }
+
+            if (this.manualWatcher)
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching manual files: ${
+                JSON.stringify(this.manualWatcher.getWatched())}[0m`);
+            }
+
             if (this.sourceWatcher)
             {
                this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source files: ${
@@ -706,6 +796,18 @@ class Watcher
       this.eventProxy.off();
 
       process.removeListener('SIGINT', this.processInterruptCallback);
+
+      if (this.indexWatcher)
+      {
+         this.indexWatcher.close();
+         this.indexWatcher = void 0;
+      }
+
+      if (this.manualWatcher)
+      {
+         this.manualWatcher.close();
+         this.manualWatcher = void 0;
+      }
 
       if (this.testWatcher)
       {
