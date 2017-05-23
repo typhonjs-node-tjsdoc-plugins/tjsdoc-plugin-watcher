@@ -164,7 +164,7 @@ class Watcher
          }
 
          // Define the default optional execution function to parse `on/off` and set state accordingly.
-         command.exec = (command, lineSplit) =>
+         command.exec = ({ command, lineSplit, showPrompt } = {}) =>
          {
             if (typeof lineSplit[1] === 'string')
             {
@@ -191,7 +191,7 @@ class Watcher
                throw new Error(`${command.name} command malformed; must be '${command.name} [on/off]'`);
             }
 
-            command.showPrompt();
+            showPrompt();
          };
       }
       else
@@ -496,9 +496,7 @@ class Watcher
                   // Handle command if it is defined and has an `exec` function.
                   if (typeof command === 'object' && typeof command.exec === 'function')
                   {
-                     command.config = config;
-                     command.showPrompt = showPrompt;
-                     command.exec(command, lineSplit, line);
+                     command.exec({ command, config, line, lineSplit, options: this.getOptions(), showPrompt });
                      return;
                   }
                }
@@ -520,13 +518,6 @@ class Watcher
 
                showPrompt();
             });
-
-//TODO REMOVE!!!!!!!!!!!!!!!!!
-            // const globData = {};
-
-            // if (config._sourceGlobs) { globData.source = config._sourceGlobs; }
-            //
-            // if (config.test && config.test._sourceGlobs) { globData.test = config.test._sourceGlobs; }
 
             this.eventbus.trigger('tjsdoc:system:watcher:initialized', this.getGlobs());
          }
@@ -563,10 +554,8 @@ class Watcher
       {
          name: 'globs',
          description: 'list globs being watched',
-         exec: (command) =>
+         exec: ({ config, showPrompt } = {}) =>
          {
-            const config = command.config;
-
             if (config._sourceGlobs)
             {
                this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source globs: ${
@@ -579,7 +568,7 @@ class Watcher
                 JSON.stringify(config.test._sourceGlobs)}[0m`);
             }
 
-            command.showPrompt();
+            showPrompt();
          }
       });
 
@@ -587,7 +576,7 @@ class Watcher
       {
          name: 'help',
          description: 'this listing of commands',
-         exec: (command) =>
+         exec: ({ showPrompt } = {}) =>
          {
             this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - options:[0m`);
 
@@ -598,7 +587,7 @@ class Watcher
                 `[32m  '${next.name}'${next.type === 'optional' ? ' [on/off], ' : ', '}${next.description}[0m`);
             });
 
-            command.showPrompt();
+            showPrompt();
          }
       });
 
@@ -627,7 +616,7 @@ class Watcher
       {
          name: 'status',
          description: 'logs current optional status',
-         exec: (command) =>
+         exec: ({ showPrompt } = {}) =>
          {
             this.eventbus.trigger('log:info:raw', '[32mtjsdoc-plugin-watcher - status:[0m');
 
@@ -642,7 +631,7 @@ class Watcher
 
             this.eventbus.trigger('log:info:raw', '');
 
-            command.showPrompt();
+            showPrompt();
          }
       });
 
@@ -657,7 +646,7 @@ class Watcher
       {
          name: 'watching',
          description: 'the files being watched',
-         exec: (command) =>
+         exec: ({ showPrompt } = {}) =>
          {
             if (this.indexWatcher)
             {
@@ -683,7 +672,7 @@ class Watcher
                 JSON.stringify(this.testWatcher.getWatched())}[0m`);
             }
 
-            command.showPrompt();
+            showPrompt();
          }
       });
    }

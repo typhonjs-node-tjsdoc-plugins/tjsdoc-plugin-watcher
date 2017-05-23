@@ -209,7 +209,6 @@ describe('tjsdoc-plugin-watcher', () =>
          {
             if (!verifyInfo[key])
             {
-console.log('!!!!! verifyInfo: ' + JSON.stringify(verifyInfo));
                throw new Error(`Did not receive all verbose log messages, verifyInfo: ${JSON.stringify(verifyInfo)}`);
             }
          }
