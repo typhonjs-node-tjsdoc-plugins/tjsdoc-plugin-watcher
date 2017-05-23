@@ -534,7 +534,7 @@ class Watcher
     * `exit`      - Shutdown watcher and exit TJSDoc execution.
     * `globs`     - List the source and test globs being watched.
     * `help`      - Log a listing of commands.
-    * `paused`     - [on/off], turns on / off watcher events.
+    * `paused`    - [on/off], turns on / off triggering watcher events.
     * `regen`     - Regenerates all documentation.
     * `silent`    - [on/off], turns on / off logging.
     * `status`    - Logs current optional status.
@@ -594,7 +594,7 @@ class Watcher
       this.addCommand(
       {
          name: 'paused',
-         description: 'turns on / off watcher events',
+         description: 'turns on / off triggering watcher events',
          type: 'optional'
       });
 
