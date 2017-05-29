@@ -67,16 +67,16 @@ class Watcher
       /**
        * Stores any optional on / off actions which store a boolean for current state.
        *
-       * paused: while true no runtime watcher events are triggered or logging occurs; default: false
+       * trigger: while true runtime watcher events are triggered or logging occurs; default: true
        * silent: if true then no output is logged; default: false.
        * verbose: if true then additional verbose output is logged; default: false.
        *
-       * @type {{paused: boolean, silent: boolean, verbose: boolean}}
+       * @type {{trigger: boolean, silent: boolean, verbose: boolean}}
        */
       this.options =
       {
-         paused: typeof this.pluginOptions.paused === 'boolean' ? this.pluginOptions.paused : false,
          silent: typeof this.pluginOptions.silent === 'boolean' ? this.pluginOptions.silent : false,
+         trigger: typeof this.pluginOptions.trigger === 'boolean' ? this.pluginOptions.trigger : true,
          verbose: typeof this.pluginOptions.verbose === 'boolean' ? this.pluginOptions.verbose : false
       };
 
@@ -220,7 +220,7 @@ class Watcher
    /**
     * Gets the current user settable options.
     *
-    * @returns {{paused: boolean, silent: boolean, verbose: boolean}}
+    * @returns {{trigger: boolean, silent: boolean, verbose: boolean}}
     */
    getOptions()
    {
@@ -450,7 +450,7 @@ class Watcher
       if (watcherPromises.length > 0)
       {
          // If there is no terminal enabled hook into process SIGINT event. Otherwise set terminal readline loop
-         // waiting for the user to type in the commands: `exit`, `globs`, `help`, `paused`, `regen`, `silent`,
+         // waiting for the user to type in the commands: `exit`, `globs`, `help`, `trigger`, `regen`, `silent`,
          // `status`, `verbose`, `watching`. The readline terminal will hook into SIGINT (`Ctrl-C`) & SIGHUP (`Ctrl-D`)
          // events and will send the close event if activated.
          if (!this.terminal)
@@ -534,7 +534,7 @@ class Watcher
     * `exit`      - Shutdown watcher and exit TJSDoc execution.
     * `globs`     - List the source and test globs being watched.
     * `help`      - Log a listing of commands.
-    * `paused`    - [on/off], turns on / off triggering watcher events.
+    * `trigger`   - [on/off], turns on / off triggering watcher events.
     * `regen`     - Regenerates all documentation.
     * `silent`    - [on/off], turns on / off logging.
     * `status`    - Logs current optional status.
@@ -593,13 +593,6 @@ class Watcher
 
       this.addCommand(
       {
-         name: 'paused',
-         description: 'turns on / off triggering watcher events',
-         type: 'optional'
-      });
-
-      this.addCommand(
-      {
          name: 'regen',
          description: 'regenerate all documentation',
          exec: () => setImmediate(() => this.eventbus.trigger('tjsdoc:system:watcher:shutdown', { regenerate: true }))
@@ -633,6 +626,13 @@ class Watcher
 
             showPrompt();
          }
+      });
+
+      this.addCommand(
+      {
+         name: 'trigger',
+         description: 'turns on / off triggering watcher events',
+         type: 'optional'
       });
 
       this.addCommand(
@@ -684,7 +684,7 @@ class Watcher
     */
    log(message)
    {
-      if (!this.options.silent && !this.options.paused)
+      if (!this.options.silent && this.options.trigger)
       {
          if (this.promptVisible)
          {
@@ -704,7 +704,7 @@ class Watcher
     */
    logVerbose(message)
    {
-      if (this.options.verbose && !this.options.silent && !this.options.paused)
+      if (this.options.verbose && !this.options.silent && this.options.trigger)
       {
          if (this.promptVisible)
          {
@@ -819,13 +819,13 @@ class Watcher
    }
 
    /**
-    * Triggers any outbound events if not paused.
+    * Triggers any outbound events if not trigger.
     *
     * @param {*}  args - event arguments
     */
    triggerEvent(...args)
    {
-      if (!this.options.paused) { this.eventbus.trigger(...args); }
+      if (this.options.trigger) { this.eventbus.trigger(...args); }
    }
 }
 

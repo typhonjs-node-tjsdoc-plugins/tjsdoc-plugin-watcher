@@ -103,17 +103,17 @@ describe('tjsdoc-plugin-watcher', () =>
       Util.invoke(s_DEV_TARGET, './.tjsdocrc', { modConfig: false, silent: false });
    });
 
-   it('Options (paused=true), add, change, delete', (done) =>
+   it('Options (trigger=false), add, change, delete', (done) =>
    {
       const config = JSON.parse(fs.readFileSync('./.tjsdocrc').toString());
 
-      config.plugins = [{ name: './src/Watcher.js', options: { paused: true } }];
+      config.plugins = [{ name: './src/Watcher.js', options: { trigger: false } }];
 
       s_PERFORM_INIT_TEST(eventProxy, true, () =>
       {
-         eventProxy.on('tjsdoc:system:watcher:update', () => { throw new Error('should be paused.'); });
+         eventProxy.on('tjsdoc:system:watcher:update', () => { throw new Error('triggering should be off.'); });
 
-         // Since the watcher is paused s_PERFORM_CHANGES will throw an error!
+         // Since the watcher is not triggering s_PERFORM_CHANGES will throw an error!
          setTimeout(() =>
          {
             fs.outputFileSync('./test/dest/main/source.js', 'new');
@@ -232,33 +232,33 @@ describe('tjsdoc-plugin-watcher', () =>
          eventProxy.on('tjsdoc:system:watcher:options:changed', (newOptions) => { currentOptions = newOptions; });
 
          Util.assert.strictEqual(JSON.stringify(globs), '{"index":["./README.md"],"manual":["./test/fixture/ManualTest.md"],"source":["src/**/*","test/dest/main/**/*"],"test":["test/src/**/*","test/dest/test/**/*"]}');
-         Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(options), '{"silent":false,"trigger":true,"verbose":false}');
          Util.assert.strictEqual(JSON.stringify(watching), '{"index":{"globs":["./README.md"],"files":{"":["README.md"]}},"manual":{"globs":["./test/fixture/ManualTest.md"],"files":{"test/fixture":["ManualTest.md"]}},"source":{"globs":["src/**/*","test/dest/main/**/*"],"files":{"src":["ManualWatchGroup.js","WatchGroup.js","Watcher.js"]}},"test":{"globs":["test/src/**/*","test/dest/test/**/*"],"files":{"test/src":["Watcher.js"]}}}');
 
-         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: true });
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { trigger: false });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
-         Util.assert.strictEqual(JSON.stringify(options), '{"paused":true,"silent":false,"verbose":false}');
-         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"paused":true,"silent":false,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(options), '{"silent":false,"trigger":false,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"silent":false,"trigger":false,"verbose":false}');
 
          eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { silent: true });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
-         Util.assert.strictEqual(JSON.stringify(options), '{"paused":true,"silent":true,"verbose":false}');
-         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"paused":true,"silent":true,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(options), '{"silent":true,"trigger":false,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"silent":true,"trigger":false,"verbose":false}');
 
          eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { verbose: true });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
-         Util.assert.strictEqual(JSON.stringify(options), '{"paused":true,"silent":true,"verbose":true}');
-         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"paused":true,"silent":true,"verbose":true}');
+         Util.assert.strictEqual(JSON.stringify(options), '{"silent":true,"trigger":false,"verbose":true}');
+         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"silent":true,"trigger":false,"verbose":true}');
 
-         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: false, silent: false });
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { trigger: true, silent: false });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
-         Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":true}');
-         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"paused":false,"silent":false,"verbose":true}');
+         Util.assert.strictEqual(JSON.stringify(options), '{"silent":false,"trigger":true,"verbose":true}');
+         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"silent":false,"trigger":true,"verbose":true}');
 
-         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { paused: false, verbose: false });
+         eventProxy.triggerSync('tjsdoc:system:watcher:options:set', { trigger: true, verbose: false });
          options = eventProxy.triggerSync('tjsdoc:system:watcher:options:get');
-         Util.assert.strictEqual(JSON.stringify(options), '{"paused":false,"silent":false,"verbose":false}');
-         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"paused":false,"silent":false,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(options), '{"silent":false,"trigger":true,"verbose":false}');
+         Util.assert.strictEqual(JSON.stringify(currentOptions), '{"silent":false,"trigger":true,"verbose":false}');
 
          eventProxy.trigger('tjsdoc:system:watcher:shutdown');
       });
