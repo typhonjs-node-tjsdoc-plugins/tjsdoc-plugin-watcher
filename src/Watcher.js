@@ -210,10 +210,10 @@ class Watcher
    getGlobs()
    {
       return {
-         index: this.config.index ? [this.config.index] : [],
+         index: this.mainConfig.index ? [this.mainConfig.index] : [],
          manual: this.manualGlobs ? this.manualGlobs.all : [],
-         source: this.config._sourceGlobs ? this.config._sourceGlobs : [],
-         test: this.config.test && this.config.test._sourceGlobs ? this.config.test._sourceGlobs : []
+         source: this.mainConfig._sourceGlobs ? this.mainConfig._sourceGlobs : [],
+         test: this.mainConfig.test && this.mainConfig.test._sourceGlobs ? this.mainConfig.test._sourceGlobs : []
       };
    }
 
@@ -237,13 +237,13 @@ class Watcher
     */
    getWatching(options)
    {
-      const indexGlobs = this.config.index ? [this.config.index] : [];
+      const indexGlobs = this.mainConfig.index ? [this.mainConfig.index] : [];
       const indexFiles = this.indexWatcher ? this.indexWatcher.getWatched() : {};
       const manualGlobs = this.manualGlobs.all ? this.manualGlobs.all : [];
       const manualFiles = this.manualWatcher ? this.manualWatcher.getWatched() : {};
-      const sourceGlobs = this.config._sourceGlobs ? this.config._sourceGlobs : [];
+      const sourceGlobs = this.mainConfig._sourceGlobs ? this.mainConfig._sourceGlobs : [];
       const sourceFiles = this.sourceWatcher ? this.sourceWatcher.getWatched() : {};
-      const testGlobs = this.config.test && this.config.test._sourceGlobs ? this.config.test._sourceGlobs : [];
+      const testGlobs = this.mainConfig.test && this.mainConfig.test._sourceGlobs ? this.mainConfig.test._sourceGlobs : [];
       const testFiles = this.testWatcher ? this.testWatcher.getWatched() : {};
 
       // Filter absolute paths converting them to relative.
@@ -288,21 +288,21 @@ class Watcher
 
    /**
     * Performs the ignored match against the path against the `_includes` and `_excludes` entries in the given
-    * `config` object.
+    * `mainConfig` object.
     *
     * @param {string}   path - file / directory path.
     *
-    * @param {object}   config - object to use for `_includes` and `_excludes`.
+    * @param {object}   mainConfig - object to use for `_includes` and `_excludes`.
     *
     * @returns {boolean}
     */
-   ignoredMatch(path, config)
+   ignoredMatch(path, mainConfig)
    {
       let ignored = false;
 
       let match = false;
 
-      for (const reg of config._includes)
+      for (const reg of mainConfig._includes)
       {
          if (path.match(reg))
          {
@@ -313,7 +313,7 @@ class Watcher
 
       if (!match) { ignored = true; }
 
-      for (const reg of config._excludes)
+      for (const reg of mainConfig._excludes)
       {
          if (path.match(reg)) { ignored = true; }
       }
@@ -322,7 +322,7 @@ class Watcher
    }
 
    /**
-    * Provides an `ignores` function consumable by chokidar `options.ignored`. `config._includes` and `config._excludes`
+    * Provides an `ignores` function consumable by chokidar `options.ignored`. `mainConfig._includes` and `mainConfig._excludes`
     * is used to provide additional file filtering.
     *
     * @param {string}   path - file / directory path.
@@ -336,17 +336,17 @@ class Watcher
 
       // Attempt to retrieve fs.Stats; this may fail, but match against the path regardless.
       try { stats = stats || fs.lstatSync(path); }
-      catch (err) { ignored = this.ignoredMatch(path, this.config); }
+      catch (err) { ignored = this.ignoredMatch(path, this.mainConfig); }
 
       // Match all files.
-      if (stats && stats.isFile()) { ignored = this.ignoredMatch(path, this.config); }
+      if (stats && stats.isFile()) { ignored = this.ignoredMatch(path, this.mainConfig); }
 
       return ignored;
    }
 
    /**
-    * Provides an `ignores` function consumable by chokidar `options.ignored`. `config.test._includes` and
-    * `config.test._excludes` is used to provide additional file filtering.
+    * Provides an `ignores` function consumable by chokidar `options.ignored`. `mainConfig.test._includes` and
+    * `mainConfig.test._excludes` is used to provide additional file filtering.
     *
     * @param {string}   path - file / directory path.
     * @param {Object}   stats - fs.Stats instance (may be undefined)
@@ -359,10 +359,10 @@ class Watcher
 
       // Attempt to retrieve fs.Stats; this may fail, but match against the path regardless.
       try { stats = stats || fs.lstatSync(path); }
-      catch (err) { ignored = this.ignoredMatch(path, this.config.test); }
+      catch (err) { ignored = this.ignoredMatch(path, this.mainConfig.test); }
 
       // Match all files.
-      if (stats && stats.isFile()) { ignored = this.ignoredMatch(path, this.config.test); }
+      if (stats && stats.isFile()) { ignored = this.ignoredMatch(path, this.mainConfig.test); }
 
       return ignored;
    }
@@ -370,20 +370,20 @@ class Watcher
    /**
     * Performs setup and initialization of all chokidar watcher instances and the readline terminal.
     *
-    * @param {TJSDocConfig} config - The TJSDoc config object.
+    * @param {TJSDocConfig} mainConfig - The TJSDoc config object.
     */
-   initialize(config)
+   initialize(mainConfig)
    {
       /**
        * The target project TJSDocConfig object.
        * @type {TJSDocConfig}
        */
-      this.config = config;
+      this.mainConfig = mainConfig;
 
       // Potentially obtain manual glob object hash from publisher module which lists manual files to watch under the
       // entry 'all' and by section under `sections`.
       {
-         const globs = this.eventProxy.triggerSync('tjsdoc:data:publisher:config:manual:globs:get');
+         const globs = this.eventProxy.triggerSync('tjsdoc:data:config:publisher:manual:globs:get');
 
          // Set only if it is an object and has `all` and `sections` entries.
          if (typeof globs === 'object' && globs.all && globs.sections) { this.manualGlobs = globs; }
@@ -396,11 +396,11 @@ class Watcher
 
       const watcherPromises = [];
 
-      if (fs.existsSync(config.index))
+      if (fs.existsSync(mainConfig.index))
       {
-         this.log(`tjsdoc-plugin-watcher - watching index: ${config.index}`);
+         this.log(`tjsdoc-plugin-watcher - watching index: ${mainConfig.index}`);
 
-         this.indexWatcher = new WatchGroup(this, config.index, 'index');
+         this.indexWatcher = new WatchGroup(this, mainConfig.index, 'index');
 
          watcherPromises.push(this.indexWatcher.initialize(this.chokidarOptions));
       }
@@ -414,20 +414,20 @@ class Watcher
          watcherPromises.push(this.manualWatcher.initialize(this.chokidarOptions));
       }
 
-      if (config._sourceGlobs)
+      if (mainConfig._sourceGlobs)
       {
-         this.log(`tjsdoc-plugin-watcher - watching source globs: ${JSON.stringify(config._sourceGlobs)}`);
+         this.log(`tjsdoc-plugin-watcher - watching source globs: ${JSON.stringify(mainConfig._sourceGlobs)}`);
 
-         this.sourceWatcher = new WatchGroup(this, config._sourceGlobs, 'source');
+         this.sourceWatcher = new WatchGroup(this, mainConfig._sourceGlobs, 'source');
 
          watcherPromises.push(this.sourceWatcher.initialize(this.chokidarOptions, this.ignoredSource.bind(this)));
       }
 
-      if (config.test && config.test._sourceGlobs)
+      if (mainConfig.test && mainConfig.test._sourceGlobs)
       {
-         this.log(`tjsdoc-plugin-watcher - watching test globs: ${JSON.stringify(config.test._sourceGlobs)}`);
+         this.log(`tjsdoc-plugin-watcher - watching test globs: ${JSON.stringify(mainConfig.test._sourceGlobs)}`);
 
-         this.testWatcher = new WatchGroup(this, config.test._sourceGlobs, 'test');
+         this.testWatcher = new WatchGroup(this, mainConfig.test._sourceGlobs, 'test');
 
          watcherPromises.push(this.testWatcher.initialize(this.chokidarOptions, this.ignoredTest.bind(this)));
       }
@@ -496,7 +496,7 @@ class Watcher
                   // Handle command if it is defined and has an `exec` function.
                   if (typeof command === 'object' && typeof command.exec === 'function')
                   {
-                     command.exec({ command, config, line, lineSplit, options: this.getOptions(), showPrompt });
+                     command.exec({ command, mainConfig, line, lineSplit, options: this.getOptions(), showPrompt });
                      return;
                   }
                }
@@ -554,18 +554,18 @@ class Watcher
       {
          name: 'globs',
          description: 'list globs being watched',
-         exec: ({ config, showPrompt } = {}) =>
+         exec: ({ mainConfig, showPrompt } = {}) =>
          {
-            if (config._sourceGlobs)
+            if (mainConfig._sourceGlobs)
             {
                this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source globs: ${
-                JSON.stringify(config._sourceGlobs)}[0m`);
+                JSON.stringify(mainConfig._sourceGlobs)}[0m`);
             }
 
-            if (config.test && config.test._sourceGlobs)
+            if (mainConfig.test && mainConfig.test._sourceGlobs)
             {
                this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test globs: ${
-                JSON.stringify(config.test._sourceGlobs)}[0m`);
+                JSON.stringify(mainConfig.test._sourceGlobs)}[0m`);
             }
 
             showPrompt();
@@ -840,7 +840,7 @@ export function onComplete(ev)
 {
    ev.data.keepAlive = true;
 
-   watcher.initialize(ev.data.config);
+   watcher.initialize(ev.data.mainConfig);
 }
 
 /**
