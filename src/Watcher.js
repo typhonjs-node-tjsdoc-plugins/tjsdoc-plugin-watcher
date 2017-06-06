@@ -556,16 +556,27 @@ class Watcher
          description: 'list globs being watched',
          exec: ({ mainConfig, showPrompt } = {}) =>
          {
+            if (fs.existsSync(mainConfig.index))
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching index: ${mainConfig.index}`);
+            }
+
+            if (this.manualGlobs && this.manualGlobs.all.length > 0)
+            {
+               this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching manual globs: ${
+                JSON.stringify(this.manualGlobs.all)}`);
+            }
+
             if (mainConfig._sourceGlobs)
             {
                this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching source globs: ${
-                JSON.stringify(mainConfig._sourceGlobs)}[0m`);
+                JSON.stringify(mainConfig._sourceGlobs)}`);
             }
 
             if (mainConfig.test && mainConfig.test._sourceGlobs)
             {
                this.eventbus.trigger('log:info:raw', `[32mtjsdoc-plugin-watcher - watching test globs: ${
-                JSON.stringify(mainConfig.test._sourceGlobs)}[0m`);
+                JSON.stringify(mainConfig.test._sourceGlobs)}`);
             }
 
             showPrompt();
