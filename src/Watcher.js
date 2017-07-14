@@ -847,7 +847,7 @@ class Watcher
  *
  * @param {PluginEvent} ev - The plugin event.
  */
-export function onComplete(ev)
+export function onRuntimeCompleteAsync(ev)
 {
    ev.data.keepAlive = true;
 
